@@ -372,6 +372,32 @@
     .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(167,139,250,.3); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .img-preview { width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--stroke2); }
+    /* ===== DEV BAR ===== */
+    .dev-bar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+      background: rgba(30,10,60,.97);
+      border-bottom: 2px solid var(--accent);
+      backdrop-filter: blur(12px);
+      display: flex; align-items: center; gap: 4px;
+      padding: 6px 10px; flex-wrap: wrap;
+      font-size: .75rem;
+    }
+    .dev-bar-label {
+      color: var(--accent); font-weight: 800; font-size: .72rem;
+      letter-spacing:.05em; text-transform:uppercase; padding-right:6px;
+      border-right: 1px solid var(--stroke2); margin-right:2px; white-space:nowrap;
+    }
+    .dev-btn {
+      padding: 3px 9px; border-radius: 6px; font-size: .73rem; font-weight: 600;
+      cursor: pointer; border: 1px solid var(--stroke2);
+      background: rgba(255,255,255,.08); color: var(--muted);
+      transition: all .12s; white-space: nowrap;
+    }
+    .dev-btn:hover { background: rgba(167,139,250,.25); color: var(--accent); border-color: var(--accent2); }
+    .dev-btn.active { background: var(--accent); color: #1a0a3d; border-color: var(--accent); }
+    .dev-btn.danger { color: var(--bad); border-color: rgba(251,113,133,.3); }
+    .dev-btn.danger:hover { background: rgba(251,113,133,.15); }
+    body.dev-mode-on #root { padding-top: 40px; }
     /* ===== RESPONSIVE ===== */
     @media (max-width: 480px) {
       .topbar-name { font-size: .88rem; }
@@ -518,6 +544,8 @@ let S = {
   user: null,
   staffUser: null,
   masterAuthed: false,
+  devMode: false,
+  devUser: {id:'dev-user-id', name:'Dev Testeur', name_lc:'dev testeur', location:'Local 101'},
   categories: [],
   products: [],
   productOptions: [],
@@ -969,6 +997,68 @@ function formatOptionsDisplay(entry) {
   }
   if (entry.otherText) parts.push(`"${entry.otherText}"`);
   return parts.join(' · ');
+}
+
+// ===== RENDER — DEV BAR =====
+function renderDevBar() {
+  const route = getRoute();
+
+  const sections = [
+    { label:'👤 Client', sub:[
+      { l:'Commander', r:'client', v:'order' },
+      { l:'Commandes', r:'client', v:'history' },
+      { l:'Favoris',   r:'client', v:'favorites' },
+      { l:'Compte',    r:'client', v:'account' },
+    ]},
+    { label:'👨‍💼 Staff', sub:[
+      { l:'Dashboard', r:'staff' },
+      { l:'Menu',      r:'staff_menu' },
+      { l:'Horaires',  r:'staff_hours' },
+    ]},
+    { label:'🔑 Maître', sub:[
+      { l:'Page maître', r:'master' },
+    ]},
+  ];
+
+  const bar = h('div',{className:'dev-bar'},
+    h('span',{className:'dev-bar-label'},'🛠 Dev'),
+  );
+
+  for (const section of sections) {
+    bar.appendChild(h('span',{style:{color:'var(--muted)',padding:'0 4px',fontSize:'.7rem'}},section.label));
+    for (const btn of section.sub) {
+      const isActive = route === btn.r && (!btn.v || S.clientView === btn.v);
+      bar.appendChild(h('button',{
+        className:`dev-btn ${isActive?'active':''}`,
+        onClick:()=>{
+          // Inject dev user/staff as needed
+          if (btn.r.startsWith('client') || btn.r === 'client') {
+            if (!S.user) { S.user = S.devUser; }
+            if (!S.staffUser) {} // keep staff if set
+          }
+          if (btn.r.startsWith('staff')) {
+            if (!S.staffUser) S.staffUser = {id:'dev-staff-id', name:'Dev Staff'};
+          }
+          if (btn.v) S.clientView = btn.v;
+          navigate(btn.r);
+          scheduleRender();
+        },
+      }, btn.l));
+    }
+    bar.appendChild(h('span',{style:{width:'6px',display:'inline-block'}}));
+  }
+
+  bar.appendChild(h('button',{
+    className:'dev-btn danger',
+    style:{marginLeft:'auto'},
+    onClick:()=>{
+      S.devMode=false;
+      document.body.classList.remove('dev-mode-on');
+      scheduleRender();
+    },
+  },'✕ Quitter dev'));
+
+  return bar;
 }
 
 // ===== RENDER — TOPBAR =====
@@ -1965,6 +2055,18 @@ function renderMasterPage() {
   }
 
   // Authenticated master view
+
+  // Bouton mode dev
+  wrap.appendChild(h('div',{
+    style:{background:'rgba(167,139,250,.1)',border:'1px solid var(--accent2)',borderRadius:'var(--radius-sm)',padding:'14px',marginBottom:'18px'}},
+    h('div',{style:{fontWeight:'700',marginBottom:'6px'}},'🛠 Mode développement'),
+    h('p',{className:'text-muted',style:{fontSize:'.85rem',marginBottom:'10px'}},'Active une barre flottante pour naviguer entre toutes les interfaces sans connexion/déconnexion.'),
+    h('button',{
+      className:'btn btn-primary',
+      onClick:()=>{ S.devMode=true; S.user=S.devUser; S.staffUser={id:'dev-staff-id',name:'Dev Staff'}; navigate('client'); scheduleRender(); },
+    },'🚀 Activer le mode dev'),
+  ));
+
   wrap.appendChild(h('div',{className:'row-between mb'},
     h('h3',{style:{fontSize:'1rem'}},'Comptes staff existants'),
     h('button',{className:'btn btn-ghost btn-sm',onClick:()=>{
@@ -2031,6 +2133,18 @@ function render() {
   const root = document.getElementById('root');
   root.innerHTML = '';
   const route = getRoute();
+
+  // Dev bar (flottante, hors du root)
+  const existingDevBar = document.getElementById('dev-bar-el');
+  if (existingDevBar) existingDevBar.remove();
+  if (S.devMode) {
+    document.body.classList.add('dev-mode-on');
+    const db = renderDevBar();
+    db.id = 'dev-bar-el';
+    document.body.insertBefore(db, root);
+  } else {
+    document.body.classList.remove('dev-mode-on');
+  }
 
   root.appendChild(renderTopbar());
 
