@@ -1,25 +1,45 @@
 <!doctype html>
-<html lang="fr" data-theme="dark">
+<html lang="fr">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="theme-color" content="#0b1020" />
+  <meta name="theme-color" content="#f5efe4" />
   <link rel="icon" href="/logo.png" />
   <title>Café Vent de douceurs express</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:       #0b1020;
-      --bg2:      #111830;
-      --panel:    rgba(17, 26, 51, 0.72);
-      --stroke:   rgba(167, 139, 250, 0.18);
-      --accent:   #a78bfa;
-      --accent2:  #7c3aed;
-      --text:     #e8ecff;
-      --muted:    #8b97c6;
-      --good:     #34d399;
-      --radius:   20px;
+      --bg:        #f5efe4;
+      --bg2:       #ede4d3;
+      --surface:   #fffcf7;
+      --stroke:    rgba(92, 61, 46, 0.12);
+      --stroke2:   rgba(92, 61, 46, 0.22);
+      --espresso:  #3e2612;
+      --brown:     #7b4a2d;
+      --caramel:   #c4773b;
+      --sage:      #4a7c5f;
+      --text:      #2a1b0e;
+      --muted:     #7a6555;
+      --good:      #3d7a5c;
+      --radius:    18px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg:       #1a1108;
+        --bg2:      #221608;
+        --surface:  #2a1e0f;
+        --stroke:   rgba(196,119,59,.18);
+        --stroke2:  rgba(196,119,59,.28);
+        --espresso: #f0d9bc;
+        --brown:    #d4935a;
+        --caramel:  #e09f5a;
+        --sage:     #6ab88f;
+        --text:     #f0e4d0;
+        --muted:    #a0896f;
+        --good:     #6ab88f;
+      }
     }
 
     html, body {
@@ -30,31 +50,29 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    /* ── Fond animé ── */
+    /* ── Fond texturé léger ── */
     .bg {
-      position: fixed; inset: 0; z-index: 0; overflow: hidden;
-    }
-    .bg::before {
-      content: '';
-      position: absolute; inset: 0;
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
       background:
-        radial-gradient(ellipse 70% 55% at 15% 60%, rgba(124,58,237,.22) 0%, transparent 65%),
-        radial-gradient(ellipse 50% 40% at 85% 25%, rgba(167,139,250,.14) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 50% at 50% 100%, rgba(30,10,80,.5) 0%, transparent 70%);
-      animation: breathe 9s ease-in-out infinite alternate;
+        radial-gradient(ellipse 70% 50% at 10% 80%, rgba(196,119,59,.13) 0%, transparent 60%),
+        radial-gradient(ellipse 55% 45% at 90% 15%, rgba(74,124,95,.10) 0%, transparent 55%),
+        radial-gradient(ellipse 80% 60% at 50% 50%, rgba(237,228,211,.6) 0%, transparent 80%);
+      animation: softdrift 14s ease-in-out infinite alternate;
     }
+    @keyframes softdrift {
+      from { opacity: .7; }
+      to   { opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .bg { animation: none; }
+    }
+
+    /* ── Grain décoratif (CSS pur) ── */
     .bg::after {
       content: '';
       position: absolute; inset: 0;
-      background: radial-gradient(ellipse 40% 30% at 60% 70%, rgba(167,139,250,.08) 0%, transparent 55%);
-      animation: breathe 13s ease-in-out infinite alternate-reverse;
-    }
-    @keyframes breathe {
-      from { opacity: .6; transform: scale(1); }
-      to   { opacity: 1;  transform: scale(1.06); }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .bg::before, .bg::after { animation: none; }
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+      opacity: .5;
     }
 
     /* ── Mise en page ── */
@@ -63,79 +81,93 @@
       min-height: 100dvh;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      padding: 24px 16px;
+      padding: 32px 16px;
     }
 
     /* ── Carte ── */
     .card {
-      background: var(--panel);
-      border: 1px solid var(--stroke);
+      background: var(--surface);
+      border: 1px solid var(--stroke2);
       border-radius: var(--radius);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      padding: 40px 36px 36px;
-      max-width: 420px; width: 100%;
+      padding: 44px 40px 38px;
+      max-width: 430px; width: 100%;
       text-align: center;
-      box-shadow: 0 24px 64px rgba(0,0,0,.5), 0 0 0 1px rgba(167,139,250,.08);
+      box-shadow:
+        0 2px 0 var(--stroke2),
+        0 12px 40px rgba(62, 38, 18, .10),
+        0 2px 8px rgba(62,38,18,.06);
     }
 
     /* ── Logo ── */
     .logo-wrap {
-      width: 88px; height: 88px;
-      border-radius: 22px;
-      background: #fff;
+      width: 90px; height: 90px;
+      border-radius: 20px;
+      background: var(--bg);
+      border: 1px solid var(--stroke2);
       display: flex; align-items: center; justify-content: center;
-      margin: 0 auto 24px;
-      box-shadow: 0 8px 28px rgba(124,58,237,.3);
-      padding: 6px;
+      margin: 0 auto 26px;
+      padding: 8px;
+      box-shadow: 0 4px 16px rgba(62,38,18,.12);
     }
     .logo-wrap img {
-      width: 100%; height: 100%; object-fit: contain; border-radius: 16px;
+      width: 100%; height: 100%; object-fit: contain; border-radius: 12px;
     }
 
     /* ── Texte ── */
     .school {
-      font-size: .72rem; font-weight: 600; letter-spacing: .1em;
-      text-transform: uppercase; color: var(--accent);
-      margin-bottom: 6px;
-    }
-    .app-name {
-      font-size: 1.35rem; font-weight: 800; line-height: 1.2;
-      text-wrap: balance; margin-bottom: 20px;
+      font-size: .7rem; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--sage);
+      margin-bottom: 8px;
     }
 
-    /* ── Séparateur ── */
+    .app-name {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 1.5rem; font-weight: 700; line-height: 1.2;
+      color: var(--espresso);
+      text-wrap: balance;
+      margin-bottom: 22px;
+    }
+
+    /* ── Séparateur ornemental ── */
     .divider {
-      border: none; border-top: 1px solid var(--stroke);
-      margin: 20px 0;
+      display: flex; align-items: center; gap: 10px;
+      margin: 0 0 20px;
+      color: var(--caramel);
+      font-size: .75rem; letter-spacing: .06em;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--stroke2);
     }
 
     /* ── Badge statut ── */
     .status-badge {
       display: inline-flex; align-items: center; gap: 8px;
-      background: rgba(167,139,250,.12);
-      border: 1px solid rgba(167,139,250,.28);
+      background: rgba(196,119,59,.1);
+      border: 1px solid rgba(196,119,59,.3);
       border-radius: 999px;
-      padding: 6px 14px;
-      font-size: .8rem; font-weight: 600; color: var(--accent);
-      margin-bottom: 18px;
+      padding: 6px 15px;
+      font-size: .78rem; font-weight: 600; color: var(--brown);
+      margin-bottom: 20px;
     }
     .status-dot {
       width: 7px; height: 7px; border-radius: 50%;
-      background: var(--accent);
-      box-shadow: 0 0 0 0 rgba(167,139,250,.6);
-      animation: ping 2.2s cubic-bezier(.4,0,.6,1) infinite;
+      background: var(--caramel);
+      box-shadow: 0 0 0 0 rgba(196,119,59,.5);
+      animation: ping 2.4s ease-in-out infinite;
     }
     @keyframes ping {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(167,139,250,.6); }
-      50%       { box-shadow: 0 0 0 6px rgba(167,139,250,0); }
+      0%, 100% { box-shadow: 0 0 0 0 rgba(196,119,59,.5); }
+      50%       { box-shadow: 0 0 0 7px rgba(196,119,59,0); }
     }
     @media (prefers-reduced-motion: reduce) {
       .status-dot { animation: none; }
     }
 
     .message {
-      font-size: .92rem; line-height: 1.65; color: var(--muted);
+      font-size: .9rem; line-height: 1.7; color: var(--muted);
       text-wrap: balance;
     }
     .message strong { color: var(--text); font-weight: 600; }
@@ -143,34 +175,34 @@
     /* ── Indicateur connexion ── */
     .conn-wrap {
       margin-top: 24px;
-      padding: 13px 16px;
-      border-radius: 12px;
-      border: 1px solid rgba(52,211,153,.0);
-      background: rgba(52,211,153,.0);
-      transition: background .5s, border-color .5s;
-      display: flex; align-items: center; justify-content: center; gap: 9px;
-      font-size: .82rem; font-weight: 600; color: transparent;
-      transition: background .6s ease, border-color .6s ease, color .6s ease;
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      background: transparent;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      font-size: .82rem; font-weight: 600;
+      color: transparent;
+      transition: background .7s ease, border-color .7s ease, color .7s ease;
     }
     .conn-wrap.ready {
-      background: rgba(52,211,153,.1);
-      border-color: rgba(52,211,153,.3);
+      background: rgba(61,122,92,.09);
+      border-color: rgba(61,122,92,.3);
       color: var(--good);
     }
-    .conn-icon { font-size: 1rem; }
 
     /* ── Footer ── */
     .footer {
-      margin-top: 32px;
-      font-size: .72rem; color: var(--muted);
-      opacity: .55;
-      letter-spacing: .02em;
+      margin-top: 28px;
+      font-size: .7rem; color: var(--muted);
+      opacity: .5; letter-spacing: .04em;
+      text-align: center;
     }
   </style>
 </head>
 <body>
   <div class="bg"></div>
   <div class="page">
+
     <div class="card">
 
       <div class="logo-wrap">
@@ -180,31 +212,30 @@
       <p class="school">École Régionale de Vent-Nouveau</p>
       <h1 class="app-name">Café Vent de douceurs express</h1>
 
+      <div class="divider">☕</div>
+
       <div class="status-badge">
         <span class="status-dot"></span>
-        Application en développement
+        Application en cours de développement
       </div>
 
-      <hr class="divider" />
-
       <p class="message">
-        Notre système de commandes en ligne est en cours de configuration.<br /><br />
-        <strong>Il sera disponible très prochainement</strong> pour faciliter vos commandes au café scolaire.
+        Le système de commandes en ligne est en cours de configuration.<br /><br />
+        <strong>Il sera disponible très bientôt</strong> pour faciliter vos commandes au café scolaire.
       </p>
 
       <div class="conn-wrap" id="conn">
-        <span class="conn-icon">✓</span>
+        <span>✓</span>
         Accès réseau confirmé
       </div>
 
     </div>
 
     <p class="footer">Café Vent de douceurs express &nbsp;·&nbsp; Commandes en ligne</p>
+
   </div>
 
   <script>
-    // Affiche la confirmation de connexion après 1.2s
-    // Permet à la cliente de confirmer que le réseau scolaire laisse passer le site
     setTimeout(() => {
       document.getElementById('conn').classList.add('ready');
     }, 1200);
