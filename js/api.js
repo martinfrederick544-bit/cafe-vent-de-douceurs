@@ -146,7 +146,10 @@ async function enablePush(role) {
   if (!("Notification" in window)) throw new Error("NOTIF_UNSUPPORTED");
   if (!("serviceWorker" in navigator)) throw new Error("SW_UNSUPPORTED");
   if (!("PushManager" in window)) throw new Error("PUSH_UNAVAILABLE"); // iOS : seulement en mode app (écran d'accueil)
-  const perm = await Notification.requestPermission();
+  // Ne redemande la permission que si nécessaire (iOS refuse un 2e appel hors geste de l'utilisateur)
+  let perm = Notification.permission;
+  if (perm !== "granted") perm = await Notification.requestPermission();
+  if (perm === "default") throw new Error("PERMISSION_DISMISSED");
   if (perm !== "granted") throw new Error("PERMISSION_DENIED");
   const reg = await navigator.serviceWorker.ready;
   let sub = await reg.pushManager.getSubscription();
@@ -178,6 +181,7 @@ async function unsubscribePushForThisDevice() {
 function pushErrorText(e) {
   const m = String((e && e.message) || e);
   if (m === "PUSH_UNAVAILABLE") return "Notifications indisponibles ici. Sur iPhone/iPad : ajoute d'abord le site à l'écran d'accueil et ouvre-le depuis l'icône.";
+  if (m === "PERMISSION_DISMISSED") return "Tu as fermé la demande sans choisir. Touche de nouveau le bouton, puis « Autoriser ».";
   if (m === "PERMISSION_DENIED") return "Notifications bloquées. Autorise-les dans les réglages de ton appareil pour ce site.";
   return "Impossible d'activer les notifications.";
 }
