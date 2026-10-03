@@ -496,7 +496,7 @@ function renderStaffReport() {
     ]));
     body.push(h("p", { class: "muted small" }, "Ventes = argent « dépensé » en boissons. Recharges = argent comptant remis au café. L'écart entre les deux est l'argent qui reste dans les portefeuilles."));
     const rows = (r.days || []).map((d) => h("tr", {}, [h("td", {}, d.d), h("td", {}, String(d.orders)), h("td", {}, String(d.drinks)), h("td", {}, money(d.sales)), h("td", {}, money(d.topups))]));
-    body.push(h("table", { class: "tbl" }, [h("thead", {}, h("tr", {}, ["Jour", "Commandes", "Boissons", "Ventes", "Recharges"].map((t) => h("th", {}, t)))), h("tbody", {}, rows)]));
+    body.push(h("div", { class: "tblWrap" }, h("table", { class: "tbl" }, [h("thead", {}, h("tr", {}, ["Jour", "Commandes", "Boissons", "Ventes", "Recharges"].map((t) => h("th", {}, t)))), h("tbody", {}, rows)])));
     if ((r.top || []).length) body.push(h("div", { style: "margin-top:14px" }, [h("h3", {}, "Boissons les plus populaires"), h("p", {}, r.top.map((t) => `${t.name} (${t.n})`).join(" · "))]));
     body.push(h("div", { class: "actions" }, [
       h("button", { class: "btn", type: "button", onClick: () => exportReportCsv(r) }, "⬇ Résumé par jour (CSV)"),

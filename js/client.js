@@ -207,8 +207,9 @@ function clientShell(active, content) {
     p && p.is_staff ? h("a", { class: "btn sm", href: "#staff" }, "Espace staff") : null,
   ]);
   const nav = h("nav", { class: "bottomNav", "aria-label": "Navigation" }, [
-    ["order", "☕ Commander"], ["orders", "🧾 Mes commandes"], ["account", "👤 Mon compte"],
-  ].map(([r, label]) => h("button", { class: "tab" + (active === r ? " active" : ""), type: "button", onClick: () => go(r) }, label)));
+    ["order", "☕", "Commander"], ["orders", "🧾", "Mes commandes"], ["account", "👤", "Mon compte"],
+  ].map(([r, ico, label]) => h("button", { class: "tab" + (active === r ? " active" : ""), type: "button", onClick: () => go(r) },
+    [h("span", { class: "ico" }, ico), h("span", { class: "lbl" }, label)])));
   return h("div", {}, [top, h("main", { class: "wrap" }, content), nav]);
 }
 
@@ -297,7 +298,7 @@ function renderCartBar() {
   const t = cartTotals();
   return h("button", {
     class: "btn primary", type: "button",
-    style: "position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 70px);z-index:25;box-shadow:var(--shadow)",
+    style: "position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 78px);z-index:25;box-shadow:var(--shadow);max-width:calc(100vw - 24px);width:max-content;text-align:center;line-height:1.2",
     onClick: () => { const c = $("#cartCard"); if (c) c.scrollIntoView({ behavior: "smooth", block: "start" }); },
   }, `🛒 ${UI.cart.length} boisson${UI.cart.length > 1 ? "s" : ""} · ${money(t.total)} — Voir le panier`);
 }
