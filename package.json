@@ -1,0 +1,10 @@
+{
+  "name": "cafe-vent-de-douceurs",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Café Vent de douceurs express — PWA de commandes (site statique + 2 fonctions Vercel : push et keepalive)",
+  "dependencies": {
+    "web-push": "3.6.7"
+  },
+  "engines": { "node": ">=18" }
+}
