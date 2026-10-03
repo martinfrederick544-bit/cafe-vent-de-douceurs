@@ -54,6 +54,18 @@ function iconUrl(file) {
   return VD.ICON_OVERRIDES[file] || (VD.ICON_BASE + file);
 }
 
+/** <img> d'un pictogramme. Les images d'origine des boissons (.png 1024×768 avec marges) sont recadrées sur le carré brun. */
+function iconImg(file, o) {
+  o = o || {};
+  const url = iconUrl(file);
+  if (!url) return null;
+  if (/\.png(\?|$)/i.test(url)) {
+    return h("span", { class: "crop " + (o.class || ""), style: o.style || "", onClick: o.onClick, title: o.alt || "" },
+      h("img", { src: url, alt: o.alt || "", loading: "lazy" }));
+  }
+  return h("img", { class: o.class || "", style: o.style || "", src: url, alt: o.alt || "", loading: "lazy", onClick: o.onClick });
+}
+
 /* ---------- erreurs ---------- */
 const ERRORS_FR = {
   PHOTO_REQUIRED: "Une photo de profil est requise avant de commander. Ajoute-la dans « Mon compte » ou demande au café de le faire.",

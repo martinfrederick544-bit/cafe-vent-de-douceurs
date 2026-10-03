@@ -217,7 +217,7 @@ function staffItemRow(it) {
   if (it.marshmallows) addons.push({ icon: "guimauves.jpg", label: "", title: "Guimauves" });
   if (it.dairy_free) addons.push({ emoji: "🌱", label: "sans lait", title: "Sans produits laitiers" });
   return h("div", { class: "itemLine" }, [
-    it.icon ? h("img", { class: "big", src: iconUrl(it.icon), alt: it.name, onClick: () => openImage(iconUrl(it.icon), it.name) }) : null,
+    it.icon ? iconImg(it.icon, { class: "big", alt: it.name, onClick: () => openImage(it.icon, it.name) }) : null,
     h("div", { class: "desc" }, [
       h("b", {}, it.name + (it.free ? " 🎁" : "")),
       h("div", { class: "addons" }, addons.map((a) => h("span", { class: "addon", title: a.title }, [

@@ -275,7 +275,7 @@ function renderOrderScreen() {
   const drinks = (menu().drinks || []);
   const grid = h("div", { class: "drinkGrid" }, drinks.map((d) =>
     h("button", { class: "drinkCard" + (d.available === false ? " off" : ""), type: "button", onClick: () => openBuilder(d.id) }, [
-      d.icon ? h("img", { src: iconUrl(d.icon), alt: d.name, loading: "lazy" }) : h("div", { class: "avatar ph", style: "width:100%;height:120px;border-radius:0;border:none" }, d.name),
+      d.icon ? iconImg(d.icon, { alt: d.name, class: "pic" }) : h("div", { class: "avatar ph", style: "width:100%;height:120px;border-radius:0;border:none" }, d.name),
       h("div", { class: "cap" }, [h("b", {}, d.name), h("span", { class: "pill" }, money(d.priceCents))]),
     ])));
 
@@ -314,7 +314,7 @@ function renderCartCard() {
     const d = drinkById(it.drink) || { name: it.drink };
     const free = i === t.freeIdx;
     card.appendChild(h("div", { class: "cartRow" }, [
-      d.icon ? h("img", { class: "thumb", src: iconUrl(d.icon), alt: "" }) : null,
+      d.icon ? iconImg(d.icon, { class: "thumb", alt: "" }) : null,
       h("div", { class: "info" }, [
         h("b", {}, d.name), h("small", {}, describeItem(it) || "Nature"),
         h("div", { class: "row", style: "margin-top:6px;gap:6px" }, [
@@ -453,7 +453,7 @@ function openBuilder(drinkId, editIdx) {
 
     return h("div", {}, [
       h("div", { class: "row", style: "gap:14px;flex-wrap:nowrap" }, [
-        d.icon ? h("img", { src: iconUrl(d.icon), alt: d.name, style: "width:96px;height:96px;border-radius:14px;object-fit:cover" }) : null,
+        d.icon ? iconImg(d.icon, { alt: d.name, class: "hdrpic", style: "width:96px;height:96px;border-radius:14px" }) : null,
         h("div", {}, [h("h2", { style: "margin:0" }, d.name), h("p", { class: "muted", style: "margin:4px 0 0" }, `Base : ${money(d.priceCents)}`)]),
       ]),
       syrupBlock, addons, addBtn,
@@ -471,7 +471,7 @@ function openBuilder(drinkId, editIdx) {
 ========================================================= */
 function orderItemRows(o, compact) {
   return (o.items || []).map((it) => h("div", { class: "itemLine" }, [
-    it.icon ? h("img", { class: "big", src: iconUrl(it.icon), alt: it.name, style: compact ? "width:48px;height:48px" : "", onClick: () => openImage(iconUrl(it.icon), it.name) }) : null,
+    it.icon ? iconImg(it.icon, { class: "big", alt: it.name, style: compact ? "width:48px;height:48px" : "", onClick: () => openImage(it.icon, it.name) }) : null,
     h("div", { class: "desc" }, [
       h("b", {}, it.name + (it.free ? "  🎁" : "")),
       h("div", { class: "muted small" }, describeItem(it) || "Nature"),
@@ -479,7 +479,7 @@ function orderItemRows(o, compact) {
     ]),
   ]));
 }
-function openImage(src, title) { openSheet(title || "", h("img", { class: "zoomImg", src, alt: title || "" })); }
+function openImage(file, title) { openSheet(title || "", iconImg(file, { class: "zoom", alt: title || "" })); }
 
 function renderMyOrdersScreen() {
   const list = h("div", {});
