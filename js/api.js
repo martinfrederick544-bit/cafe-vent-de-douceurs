@@ -1,6 +1,9 @@
 /* =========================================================
    Données : client Supabase, état global, appels backend, temps réel
 ========================================================= */
+// Lien « mot de passe oublié » : supabase-js efface le hash dès sa création → on le mémorise avant.
+const ARRIVED_VIA_RECOVERY = /type=recovery/.test(location.hash);
+
 const sb = (window.__VD_MOCK__ || supabase).createClient(VD.SUPABASE_URL, VD.SUPABASE_ANON_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 });
@@ -18,7 +21,7 @@ const State = {
   cups: [],
   users: [],
   photoCache: {},       // userId -> data URL
-  recovery: false,      // arrivé via le lien « mot de passe oublié »
+  recovery: ARRIVED_VIA_RECOVERY,      // arrivé via le lien « mot de passe oublié »
   ready: false,
 };
 
