@@ -203,14 +203,14 @@ function staffOrderCard(o) {
       ]),
       h("span", { class: "status " + o.status }, o.status),
     ]),
-    h("div", {}, (o.items || []).map(staffItemRow)),
+    h("div", {}, groupItems(o.items).map(({ it, count }) => staffItemRow(it, count))),
     o.comment ? h("div", { class: "banner", style: "margin:8px 0 0" }, "💬 " + o.comment) : null,
     cups.length ? h("div", { class: "cups" }, cupChips) : null,
     actions,
   ]);
 }
 
-function staffItemRow(it) {
+function staffItemRow(it, count) {
   const addons = [];
   if (it.syrup) addons.push({ icon: it.syrup.icon, label: LEVELS_SHORT[it.syrup.level] || "", title: it.syrup.name });
   ADDONS.forEach((a) => { if (it[a.key]) addons.push({ icon: a.icon, label: "×" + it[a.key], title: a.label }); });
@@ -219,7 +219,7 @@ function staffItemRow(it) {
   return h("div", { class: "itemLine" }, [
     it.icon ? iconImg(it.icon, { class: "big", alt: it.name, onClick: () => openImage(it.icon, it.name) }) : null,
     h("div", { class: "desc" }, [
-      h("b", {}, it.name + (it.free ? " 🎁" : "")),
+      h("b", {}, (count > 1 ? count + " × " : "") + it.name + (it.free ? " 🎁" : "")),
       h("div", { class: "addons" }, addons.map((a) => h("span", { class: "addon", title: a.title }, [
         a.icon ? h("img", { src: iconUrl(a.icon), alt: a.title }) : h("span", { style: "padding-left:6px" }, a.emoji), a.label || a.title]))),
     ]),

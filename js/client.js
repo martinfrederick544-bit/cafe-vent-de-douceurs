@@ -469,13 +469,22 @@ function openBuilder(drinkId, editIdx) {
 /* =========================================================
    MES COMMANDES
 ========================================================= */
+/** Regroupe les boissons identiques d'une commande : [{it, count}] */
+function groupItems(items) {
+  const map = new Map();
+  (items || []).forEach((it) => {
+    const key = JSON.stringify([it.drink, it.syrup, it.milk, it.cream, it.sugar, it.sweetener, it.marshmallows, it.dairy_free, !!it.free, it.price_cents]);
+    if (map.has(key)) map.get(key).count++; else map.set(key, { it, count: 1 });
+  });
+  return [...map.values()];
+}
 function orderItemRows(o, compact) {
-  return (o.items || []).map((it) => h("div", { class: "itemLine" }, [
+  return groupItems(o.items).map(({ it, count }) => h("div", { class: "itemLine" }, [
     it.icon ? iconImg(it.icon, { class: "big", alt: it.name, style: compact ? "width:48px;height:48px" : "", onClick: () => openImage(it.icon, it.name) }) : null,
     h("div", { class: "desc" }, [
-      h("b", {}, it.name + (it.free ? "  🎁" : "")),
+      h("b", {}, (count > 1 ? count + " × " : "") + it.name + (it.free ? "  🎁" : "")),
       h("div", { class: "muted small" }, describeItem(it) || "Nature"),
-      h("div", { class: "small" }, it.free ? "GRATUIT (fidélité)" : money(it.price_cents)),
+      h("div", { class: "small" }, it.free ? "GRATUIT (fidélité)" : (count > 1 ? count + " × " + money(it.price_cents) + " = " + money(it.price_cents * count) : money(it.price_cents))),
     ]),
   ]));
 }
