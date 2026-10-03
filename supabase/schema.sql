@@ -554,9 +554,9 @@ $$;
 
 -- Désabonnement push (à la déconnexion)
 create or replace function public.vd_unsave_push(p_endpoint text)
-returns void language sql security definer set search_path = public as $
+returns void language sql security definer set search_path = public as $$
   delete from public.vd_push_subscriptions where endpoint = p_endpoint and user_id = auth.uid();
-$;
+$$;
 
 -- Abonnement push (le staff ne peut s'abonner qu'en tant que staff)
 create or replace function public.vd_save_push(p_endpoint text, p_p256dh text, p_auth text, p_role text)
