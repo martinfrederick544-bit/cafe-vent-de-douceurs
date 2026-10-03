@@ -2,243 +2,32 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#f5efe4" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Vent Douceurs" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/logo.png" />
   <link rel="icon" href="/logo.png" />
   <title>Café Vent de douceurs express</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg:        #f5efe4;
-      --bg2:       #ede4d3;
-      --surface:   #fffcf7;
-      --stroke:    rgba(92, 61, 46, 0.12);
-      --stroke2:   rgba(92, 61, 46, 0.22);
-      --espresso:  #3e2612;
-      --brown:     #7b4a2d;
-      --caramel:   #c4773b;
-      --sage:      #4a7c5f;
-      --text:      #2a1b0e;
-      --muted:     #7a6555;
-      --good:      #3d7a5c;
-      --radius:    18px;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg:       #1a1108;
-        --bg2:      #221608;
-        --surface:  #2a1e0f;
-        --stroke:   rgba(196,119,59,.18);
-        --stroke2:  rgba(196,119,59,.28);
-        --espresso: #f0d9bc;
-        --brown:    #d4935a;
-        --caramel:  #e09f5a;
-        --sage:     #6ab88f;
-        --text:     #f0e4d0;
-        --muted:    #a0896f;
-        --good:     #6ab88f;
-      }
-    }
-
-    html, body {
-      height: 100%;
-      background: var(--bg);
-      color: var(--text);
-      font-family: system-ui, -apple-system, sans-serif;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    /* ── Fond texturé léger ── */
-    .bg {
-      position: fixed; inset: 0; z-index: 0; pointer-events: none;
-      background:
-        radial-gradient(ellipse 70% 50% at 10% 80%, rgba(196,119,59,.13) 0%, transparent 60%),
-        radial-gradient(ellipse 55% 45% at 90% 15%, rgba(74,124,95,.10) 0%, transparent 55%),
-        radial-gradient(ellipse 80% 60% at 50% 50%, rgba(237,228,211,.6) 0%, transparent 80%);
-      animation: softdrift 14s ease-in-out infinite alternate;
-    }
-    @keyframes softdrift {
-      from { opacity: .7; }
-      to   { opacity: 1; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .bg { animation: none; }
-    }
-
-    /* ── Grain décoratif (CSS pur) ── */
-    .bg::after {
-      content: '';
-      position: absolute; inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
-      opacity: .5;
-    }
-
-    /* ── Mise en page ── */
-    .page {
-      position: relative; z-index: 1;
-      min-height: 100dvh;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      padding: 32px 16px;
-    }
-
-    /* ── Carte ── */
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--stroke2);
-      border-radius: var(--radius);
-      padding: 44px 40px 38px;
-      max-width: 430px; width: 100%;
-      text-align: center;
-      box-shadow:
-        0 2px 0 var(--stroke2),
-        0 12px 40px rgba(62, 38, 18, .10),
-        0 2px 8px rgba(62,38,18,.06);
-    }
-
-    /* ── Logo ── */
-    .logo-wrap {
-      width: 90px; height: 90px;
-      border-radius: 20px;
-      background: var(--bg);
-      border: 1px solid var(--stroke2);
-      display: flex; align-items: center; justify-content: center;
-      margin: 0 auto 26px;
-      padding: 8px;
-      box-shadow: 0 4px 16px rgba(62,38,18,.12);
-    }
-    .logo-wrap img {
-      width: 100%; height: 100%; object-fit: contain; border-radius: 12px;
-    }
-
-    /* ── Texte ── */
-    .school {
-      font-size: .7rem; font-weight: 700; letter-spacing: .1em;
-      text-transform: uppercase; color: var(--sage);
-      margin-bottom: 8px;
-    }
-
-    .app-name {
-      font-family: Georgia, 'Times New Roman', serif;
-      font-size: 1.5rem; font-weight: 700; line-height: 1.2;
-      color: var(--espresso);
-      text-wrap: balance;
-      margin-bottom: 22px;
-    }
-
-    /* ── Séparateur ornemental ── */
-    .divider {
-      display: flex; align-items: center; gap: 10px;
-      margin: 0 0 20px;
-      color: var(--caramel);
-      font-size: .75rem; letter-spacing: .06em;
-    }
-    .divider::before, .divider::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: var(--stroke2);
-    }
-
-    /* ── Badge statut ── */
-    .status-badge {
-      display: inline-flex; align-items: center; gap: 8px;
-      background: rgba(196,119,59,.1);
-      border: 1px solid rgba(196,119,59,.3);
-      border-radius: 999px;
-      padding: 6px 15px;
-      font-size: .78rem; font-weight: 600; color: var(--brown);
-      margin-bottom: 20px;
-    }
-    .status-dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: var(--caramel);
-      box-shadow: 0 0 0 0 rgba(196,119,59,.5);
-      animation: ping 2.4s ease-in-out infinite;
-    }
-    @keyframes ping {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(196,119,59,.5); }
-      50%       { box-shadow: 0 0 0 7px rgba(196,119,59,0); }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .status-dot { animation: none; }
-    }
-
-    .message {
-      font-size: .9rem; line-height: 1.7; color: var(--muted);
-      text-wrap: balance;
-    }
-    .message strong { color: var(--text); font-weight: 600; }
-
-    /* ── Indicateur connexion ── */
-    .conn-wrap {
-      margin-top: 24px;
-      padding: 12px 16px;
-      border-radius: 10px;
-      border: 1px solid transparent;
-      background: transparent;
-      display: flex; align-items: center; justify-content: center; gap: 8px;
-      font-size: .82rem; font-weight: 600;
-      color: transparent;
-      transition: background .7s ease, border-color .7s ease, color .7s ease;
-    }
-    .conn-wrap.ready {
-      background: rgba(61,122,92,.09);
-      border-color: rgba(61,122,92,.3);
-      color: var(--good);
-    }
-
-    /* ── Footer ── */
-    .footer {
-      margin-top: 28px;
-      font-size: .7rem; color: var(--muted);
-      opacity: .5; letter-spacing: .04em;
-      text-align: center;
-    }
-  </style>
+  <link rel="stylesheet" href="/css/app.css" />
 </head>
 <body>
-  <div class="bg"></div>
-  <div class="page">
+  <div id="app"></div>
+  <div id="sheetRoot"></div>
 
-    <div class="card">
-
-      <div class="logo-wrap">
-        <img src="/logo.png" alt="Logo Café Vent de douceurs" />
-      </div>
-
-      <p class="school">École Régionale de Vent-Nouveau</p>
-      <h1 class="app-name">Café Vent de douceurs express</h1>
-
-      <div class="divider">☕</div>
-
-      <div class="status-badge">
-        <span class="status-dot"></span>
-        Application en cours de développement
-      </div>
-
-      <p class="message">
-        Le système de commandes en ligne est en cours de configuration.<br /><br />
-        <strong>Il sera disponible très bientôt</strong> pour faciliter vos commandes au café scolaire.
-      </p>
-
-      <div class="conn-wrap" id="conn">
-        <span>✓</span>
-        Accès réseau confirmé
-      </div>
-
-    </div>
-
-    <p class="footer">Café Vent de douceurs express &nbsp;·&nbsp; Commandes en ligne</p>
-
-  </div>
-
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
-    setTimeout(() => {
-      document.getElementById('conn').classList.add('ready');
-    }, 1200);
+    // Mode démo hors-ligne pour tester l'interface sans backend : ouvrir /?mock
+    if (location.search.indexOf("mock") !== -1) document.write('<script src="/dev/mock.js"><\/script>');
   </script>
+  <script src="/js/config.js"></script>
+  <script src="/js/lib.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/client.js"></script>
+  <script src="/js/staff.js"></script>
+  <script src="/js/main.js"></script>
 </body>
 </html>
