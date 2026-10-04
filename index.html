@@ -18,11 +18,9 @@
   <div id="app"></div>
   <div id="sheetRoot"></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script>
-    // Mode démo hors-ligne pour tester l'interface sans backend : ouvrir /?mock
-    if (location.search.indexOf("mock") !== -1) document.write('<script src="/dev/mock.js"><\/script>');
-  </script>
+  <!-- version figée + empreinte SRI : si le CDN était compromis, le navigateur refuserait le fichier modifié -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous"></script>
+  <script src="/js/mock-loader.js"></script>
   <script src="/js/config.js"></script>
   <script src="/js/lib.js"></script>
   <script src="/js/api.js"></script>

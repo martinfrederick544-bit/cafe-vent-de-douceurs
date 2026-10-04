@@ -73,9 +73,9 @@ function renderStaffLogin() {
 
 function renderStaffRegister() {
   const err = errBox();
-  const name = h("input", { autocomplete: "name", placeholder: "Ton nom", required: true });
+  const name = h("input", { autocomplete: "name", placeholder: "Ton nom", required: true, maxlength: "80" });
   const email = h("input", { type: "email", autocomplete: "email", placeholder: "Courriel", required: true });
-  const pass = h("input", { type: "password", autocomplete: "new-password", placeholder: "Au moins 6 caractères", required: true, minlength: "6" });
+  const pass = h("input", { type: "password", autocomplete: "new-password", placeholder: "Au moins 8 caractères", required: true, minlength: "8" });
   const pass2 = h("input", { type: "password", autocomplete: "new-password", placeholder: "Répète le mot de passe", required: true });
   const code = h("input", { placeholder: "Code remis par le café", autocomplete: "off", required: true });
   const btn = h("button", { class: "btn primary block", type: "submit" }, "Créer mon compte staff");

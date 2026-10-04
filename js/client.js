@@ -114,10 +114,10 @@ function renderLogin() {
 
 function renderRegister() {
   const err = errBox();
-  const name = h("input", { autocomplete: "name", placeholder: "Ex : Marie Tremblay", required: true });
-  const loc = h("input", { placeholder: "Ex : Local 203", required: true });
+  const name = h("input", { autocomplete: "name", placeholder: "Ex : Marie Tremblay", required: true, maxlength: "80" });
+  const loc = h("input", { placeholder: "Ex : Local 203", required: true, maxlength: "80" });
   const email = h("input", { type: "email", autocomplete: "email", placeholder: "prenom.nom@ecole.ca", required: true });
-  const pass = h("input", { type: "password", autocomplete: "new-password", placeholder: "Au moins 6 caractères", required: true, minlength: "6" });
+  const pass = h("input", { type: "password", autocomplete: "new-password", placeholder: "Au moins 8 caractères", required: true, minlength: "8" });
   const pass2 = h("input", { type: "password", autocomplete: "new-password", placeholder: "Répète le mot de passe", required: true });
   const btn = h("button", { class: "btn primary block", type: "submit" }, "Créer mon compte");
   const form = h("form", {}, [
@@ -175,7 +175,7 @@ function renderForgot() {
 
 function renderReset() {
   const err = errBox();
-  const pass = h("input", { type: "password", autocomplete: "new-password", placeholder: "Au moins 6 caractères", required: true, minlength: "6" });
+  const pass = h("input", { type: "password", autocomplete: "new-password", placeholder: "Au moins 8 caractères", required: true, minlength: "8" });
   const pass2 = h("input", { type: "password", autocomplete: "new-password", placeholder: "Répète le mot de passe", required: true });
   const btn = h("button", { class: "btn primary block", type: "submit" }, "Enregistrer");
   const form = h("form", {}, [h("label", {}, "Nouveau mot de passe"), pass, h("label", {}, "Confirmer"), pass2, h("div", { style: "margin-top:16px" }, btn), err]);
@@ -342,9 +342,9 @@ function renderCartCard() {
     h("button", { class: "btn" + (UI.draft.mode === "pickup" ? " on" : ""), type: "button", onClick: () => { UI.draft.mode = "pickup"; render(); } }, "🚶 Je viens la chercher"),
   ]));
   card.appendChild(h("label", {}, "Local / endroit de livraison"));
-  card.appendChild(h("input", { value: UI.draft.location, placeholder: "Ex : Local 203", onInput: (e) => { UI.draft.location = e.target.value; } }));
+  card.appendChild(h("input", { value: UI.draft.location, placeholder: "Ex : Local 203", maxlength: "80", onInput: (e) => { UI.draft.location = e.target.value; } }));
   card.appendChild(h("label", {}, "Commentaire (optionnel)"));
-  card.appendChild(h("textarea", { placeholder: "Ex : bien chaud, merci !", onInput: (e) => { UI.draft.comment = e.target.value; }, value: UI.draft.comment }));
+  card.appendChild(h("textarea", { placeholder: "Ex : bien chaud, merci !", maxlength: "300", onInput: (e) => { UI.draft.comment = e.target.value; }, value: UI.draft.comment }));
 
   card.appendChild(h("div", { class: "divider" }));
   card.appendChild(h("div", { class: "totalLine big" }, [h("span", {}, "Total"), h("span", {}, money(t.total))]));
@@ -564,8 +564,8 @@ function renderAccountScreen() {
 
   // profil
   const err = errBox();
-  const name = h("input", { value: p.name, autocomplete: "name" });
-  const loc = h("input", { value: p.location, placeholder: "Ex : Local 203" });
+  const name = h("input", { value: p.name, autocomplete: "name", maxlength: "80" });
+  const loc = h("input", { value: p.location, placeholder: "Ex : Local 203", maxlength: "80" });
   const save = h("button", { class: "btn good", type: "button", style: "margin-top:12px", onClick: async () => {
     err.classList.remove("show");
     try { await updateMyProfile(name.value, loc.value); await loadProfile(); UI.draft.location = ""; toast("Profil enregistré ✅", "good"); render(); }

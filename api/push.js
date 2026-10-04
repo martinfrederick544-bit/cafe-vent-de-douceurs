@@ -2,11 +2,17 @@
 // Appelée par les triggers PostgreSQL (pg_net) avec l'en-tête x-push-secret.
 // Env requis : PUSH_SECRET, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT, SUPABASE_URL, SUPABASE_ANON_KEY
 const webpush = require("web-push");
+const crypto = require("crypto");
+
+function sameSecret(a, b) {
+  const x = Buffer.from(String(a || "")), y = Buffer.from(String(b || ""));
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") return res.status(405).json({ error: "method" });
   const secret = process.env.PUSH_SECRET || "";
-  if (!secret || req.headers["x-push-secret"] !== secret) return res.status(401).json({ error: "unauthorized" });
+  if (!secret || !sameSecret(req.headers["x-push-secret"], secret)) return res.status(401).json({ error: "unauthorized" });
 
   const { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT } = process.env;
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return res.status(500).json({ error: "missing VAPID keys" });

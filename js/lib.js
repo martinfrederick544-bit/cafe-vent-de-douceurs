@@ -90,7 +90,8 @@ const ERRORS_FR = {
   "Invalid login credentials": "Courriel ou mot de passe incorrect.",
   "User already registered": "Un compte existe déjà avec ce courriel.",
   "Email not confirmed": "Confirme ton courriel avant de te connecter (vérifie ta boîte de réception).",
-  "Password should be at least": "Le mot de passe doit contenir au moins 6 caractères.",
+  "Password should be at least": "Le mot de passe doit contenir au moins 8 caractères.",
+  BAD_ID: "Erreur interne (identifiant de commande). Réessaie.",
   "rate limit": "Trop de tentatives. Réessaie dans quelques minutes.",
 };
 function errText(e, fallback) {

@@ -158,6 +158,16 @@ on conflict (number) do nothing;
 -- ---------------------------------------------------------------------
 -- 3) FONCTIONS UTILITAIRES
 -- ---------------------------------------------------------------------
+-- Entier tiré d'un JSON, sans jamais lever d'erreur (valeur invalide → défaut)
+create or replace function public.vd_json_int(p jsonb, p_default int default 0)
+returns int language sql immutable as $$
+  select case when jsonb_typeof(p) = 'number' then least(greatest((p #>> '{}')::numeric, -1000000), 1000000)::int else p_default end;
+$$;
+create or replace function public.vd_json_bool(p jsonb)
+returns boolean language sql immutable as $$
+  select coalesce(p = 'true'::jsonb, false);
+$$;
+
 create or replace function public.vd_is_staff()
 returns boolean language sql stable security definer set search_path = public as $$
   select coalesce((select is_staff from public.vd_profiles where id = auth.uid()), false);
@@ -178,8 +188,8 @@ begin
   values (
     new.id,
     new.email,
-    coalesce(nullif(trim(new.raw_user_meta_data->>'name'), ''), split_part(new.email, '@', 1)),
-    coalesce(trim(new.raw_user_meta_data->>'location'), '')
+    left(coalesce(nullif(trim(new.raw_user_meta_data->>'name'), ''), split_part(new.email, '@', 1)), 80),
+    left(coalesce(trim(new.raw_user_meta_data->>'location'), ''), 80)
   )
   on conflict (id) do nothing;
   return new;
@@ -225,7 +235,7 @@ begin
   if auth.uid() is null then raise exception 'NOT_AUTHENTICATED'; end if;
   if coalesce(trim(p_name),'') = '' then raise exception 'NAME_REQUIRED'; end if;
   update public.vd_profiles
-     set name = trim(p_name), location = coalesce(trim(p_location), '')
+     set name = left(trim(p_name), 80), location = left(coalesce(trim(p_location), ''), 80)
    where id = auth.uid();
 end;
 $$;
@@ -282,6 +292,7 @@ begin
   select * into v_set from public.vd_settings where id = 1;
   if v_set.require_photo and coalesce(v_prof.photo, '') = '' then raise exception 'PHOTO_REQUIRED'; end if;
   if coalesce(trim(p_location), '') = '' then raise exception 'LOCATION_REQUIRED'; end if;
+  if p_id is null or p_id !~ '^[A-Za-z0-9_-]{1,64}$' then raise exception 'BAD_ID'; end if;
   if p_mode not in ('deliver','pickup') then p_mode := 'deliver'; end if;
   if jsonb_typeof(p_items) is distinct from 'array'
      or jsonb_array_length(p_items) = 0 or jsonb_array_length(p_items) > 20 then
@@ -306,7 +317,7 @@ begin
         from jsonb_array_elements(v_menu->'syrups') s
        where s->>'id' = v_it->'syrup'->>'id' and coalesce((s->>'available')::boolean, true);
       if v_syrup is null then raise exception 'BAD_SYRUP'; end if;
-      v_level := case when (v_it->'syrup'->>'level')::int = 1 then 1 else 2 end;
+      v_level := case when public.vd_json_int(v_it->'syrup'->'level') = 1 then 1 else 2 end;
       v_price := v_price + v_surcharge;
     end if;
 
@@ -319,12 +330,12 @@ begin
       'syrup',        case when v_syrup is null then null else jsonb_build_object(
                          'id', v_syrup->>'id', 'name', v_syrup->>'name',
                          'icon', v_syrup->>'icon', 'level', v_level) end,
-      'milk',         least(greatest(coalesce((v_it->>'milk')::int, 0), 0), 3),
-      'cream',        least(greatest(coalesce((v_it->>'cream')::int, 0), 0), 3),
-      'sugar',        least(greatest(coalesce((v_it->>'sugar')::int, 0), 0), 3),
-      'sweetener',    least(greatest(coalesce((v_it->>'sweetener')::int, 0), 0), 3),
-      'marshmallows', coalesce((v_it->>'marshmallows')::boolean, false),
-      'dairy_free',   coalesce((v_it->>'dairy_free')::boolean, false)
+      'milk',         least(greatest(public.vd_json_int(v_it->'milk'), 0), 3),
+      'cream',        least(greatest(public.vd_json_int(v_it->'cream'), 0), 3),
+      'sugar',        least(greatest(public.vd_json_int(v_it->'sugar'), 0), 3),
+      'sweetener',    least(greatest(public.vd_json_int(v_it->'sweetener'), 0), 3),
+      'marshmallows', public.vd_json_bool(v_it->'marshmallows'),
+      'dairy_free',   public.vd_json_bool(v_it->'dairy_free')
                       and coalesce((v_drink->>'dairyFreeOption')::boolean, false)
     ));
 
@@ -350,7 +361,7 @@ begin
     (id, created_at_ms, user_id, user_name, default_location, location, mode, comment, status, items, total_cents, free_item)
   values
     (p_id, (extract(epoch from now()) * 1000)::bigint, v_uid, v_prof.name, v_prof.location,
-     trim(p_location), p_mode, nullif(trim(coalesce(p_comment, '')), ''), 'NOUVELLE', v_clean, v_total, v_free);
+     left(trim(p_location), 80), p_mode, nullif(left(trim(coalesce(p_comment, '')), 300), ''), 'NOUVELLE', v_clean, v_total, v_free);
 
   if v_total > 0 then
     update public.vd_profiles set balance_cents = v_new_bal where id = v_uid;
@@ -453,7 +464,7 @@ begin
 
   insert into public.vd_wallet_tx (user_id, kind, amount_cents, balance_after, note, created_by)
   values (p_user, case when p_amount_cents > 0 then 'topup' else 'adjust' end,
-          p_amount_cents, v_bal, nullif(trim(coalesce(p_note, '')), ''), auth.uid());
+          p_amount_cents, v_bal, nullif(left(trim(coalesce(p_note, '')), 200), ''), auth.uid());
 
   return jsonb_build_object('balance_cents', v_bal);
 end;
@@ -475,7 +486,7 @@ returns void language plpgsql security definer set search_path = public as $$
 begin
   perform public.vd_require_staff();
   if coalesce(trim(p_name),'') = '' then raise exception 'NAME_REQUIRED'; end if;
-  update public.vd_profiles set name = trim(p_name), location = coalesce(trim(p_location), '') where id = p_user;
+  update public.vd_profiles set name = left(trim(p_name), 80), location = left(coalesce(trim(p_location), ''), 80) where id = p_user;
 end;
 $$;
 
@@ -589,6 +600,10 @@ begin
   if v_uid is null then raise exception 'NOT_AUTHENTICATED'; end if;
   if (select count(*) from public.vd_staff_attempts
        where user_id = v_uid and not ok and created_at > now() - interval '15 minutes') >= 6 then
+    raise exception 'TOO_MANY_ATTEMPTS';
+  end if;
+  -- limite globale : empêche de contourner la limite par compte en créant plein de comptes
+  if (select count(*) from public.vd_staff_attempts where not ok and created_at > now() - interval '15 minutes') >= 40 then
     raise exception 'TOO_MANY_ATTEMPTS';
   end if;
   select code_hash into v_hash from public.vd_staff_code where id = 1;
@@ -780,7 +795,9 @@ revoke all on sequence public.vd_wallet_tx_id_seq from anon, authenticated;
 grant select on public.vd_profiles, public.vd_settings, public.vd_orders, public.vd_cups, public.vd_wallet_tx to authenticated;
 
 -- Les fonctions ne sont exécutables que par un utilisateur connecté
-revoke execute on all functions in schema public from public, anon;
+revoke execute on all functions in schema public from public, anon, authenticated;
+-- les futures fonctions ne seront pas exposées automatiquement
+alter default privileges in schema public revoke execute on functions from public, anon, authenticated;
 grant execute on function
   public.vd_is_staff(), public.vd_my_loyalty(),
   public.vd_update_my_profile(text, text), public.vd_set_my_photo(text),
