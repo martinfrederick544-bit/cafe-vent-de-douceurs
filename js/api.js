@@ -105,12 +105,6 @@ async function staffSetCupCount(n) { unwrap(await sb.rpc("vd_staff_set_cup_count
 async function staffTopup(userId, cents, note) { return unwrap(await sb.rpc("vd_staff_topup", { p_user: userId, p_amount_cents: cents, p_note: note || null })); }
 async function staffSetPhoto(userId, dataUrl) { unwrap(await sb.rpc("vd_staff_set_photo", { p_user: userId, p_photo: dataUrl })); State.photoCache[userId] = dataUrl; }
 async function staffUpdateUser(userId, name, location) { unwrap(await sb.rpc("vd_staff_update_user", { p_user: userId, p_name: name, p_location: location })); }
-async function claimStaff(code) { return unwrap(await sb.rpc("vd_claim_staff", { p_code: code })); }
-async function staffSetCode(code) { unwrap(await sb.rpc("vd_staff_set_code", { p_new: code })); }
-async function staffSetRole(userId, isStaff) { unwrap(await sb.rpc("vd_staff_set_role", { p_user: userId, p_is_staff: isStaff })); }
-async function loadStaffTeam() {
-  return unwrap(await sb.from("vd_profiles").select("id,name,email").eq("is_staff", true).order("name")) || [];
-}
 async function staffSaveSetting(key, value) { unwrap(await sb.rpc("vd_staff_save_setting", { p_key: key, p_value: value })); }
 async function staffReport(from, to) { return unwrap(await sb.rpc("vd_staff_report", { p_from: from, p_to: to })); }
 async function staffUserTx(userId, limit) {

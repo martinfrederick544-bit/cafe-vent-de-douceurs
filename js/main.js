@@ -41,7 +41,6 @@ function buildScreen() {
   if (State.recovery && State.session) r = "reset";
 
   if (!State.session) {
-    if (r === "staff_register") return renderStaffRegister();
     if (r.startsWith("staff")) return renderStaffLogin();
     if (r === "register") return renderRegister();
     if (r === "forgot") return renderForgot();

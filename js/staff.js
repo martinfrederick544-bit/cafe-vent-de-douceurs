@@ -24,104 +24,35 @@ function staffShell(active, content) {
   return h("div", {}, [top, tabs, h("main", { class: "wrap" }, content)]);
 }
 
-/* ---------- connexion / création de compte staff ---------- */
-function staffAuthPage(title, subtitle, body) {
-  return h("div", {}, [
-    brandHeader([h("a", { class: "btn sm", href: "#login" }, "Espace client")]),
-    h("main", { class: "wrap narrow" }, [
-      h("img", { class: "authLogo", src: "/logo.png", alt: "" }),
-      h("h2", { class: "authTitle" }, title),
-      h("p", { class: "muted", style: "text-align:center" }, subtitle),
-      h("div", { class: "card" }, body),
-    ]),
-  ]);
-}
-async function afterStaffClaim() {
-  await loadProfile();
-  await Promise.all([loadStaffOrders(), loadCups()]);
-  refreshPushSubscription();
-  toast("Accès staff activé ✅", "good");
-  go("staff");
-}
-
+/* ---------- connexion staff : un seul mot de passe pour tout le café ---------- */
 function renderStaffLogin() {
-  // déjà connecté avec un compte non-staff → demander le code d'accès
-  if (State.session && State.profile && !State.profile.is_staff) return renderStaffClaim();
-
   const err = errBox();
-  const email = h("input", { type: "email", autocomplete: "email", placeholder: "Courriel", required: true });
-  const pass = h("input", { type: "password", autocomplete: "current-password", placeholder: "Mot de passe", required: true });
-  const btn = h("button", { class: "btn primary block", type: "submit" }, "Se connecter");
-  const form = h("form", {}, [h("label", {}, "Courriel"), email, h("label", {}, "Mot de passe"), pass, h("div", { style: "margin-top:16px" }, btn), err]);
+  const pass = h("input", { type: "password", autocomplete: "current-password", placeholder: "Mot de passe du café", required: true, autofocus: true });
+  const btn = h("button", { class: "btn primary block", type: "submit" }, "Entrer dans l'espace staff");
+  const notice = (State.session && State.profile && !State.profile.is_staff)
+    ? h("p", { class: "muted small" }, "Tu es connecté·e avec un compte client. Entrer dans l'espace staff te déconnectera de ce compte.") : null;
+  const form = h("form", {}, [notice, h("label", {}, "Mot de passe staff"), pass, h("div", { style: "margin-top:16px" }, btn), err]);
   form.addEventListener("submit", async (e) => {
     e.preventDefault(); err.classList.remove("show"); btn.disabled = true;
     try {
-      const r = await sb.auth.signInWithPassword({ email: email.value.trim(), password: pass.value });
-      if (r.error) throw r.error;
+      await unsubscribePushForThisDevice();
+      const r = await sb.auth.signInWithPassword({ email: VD.STAFF_EMAIL, password: pass.value });
+      if (r.error) throw new Error(/invalid login/i.test(r.error.message) ? "BAD_STAFF_PASSWORD" : r.error.message);
+      State.session = r.data.session;
+      await loadProfile();
+      if (!State.profile || !State.profile.is_staff) { await sb.auth.signOut(); throw new Error("NOT_STAFF"); }
       go("staff");
     } catch (ex) { showErr(err, errText(ex, "Connexion impossible.")); }
     finally { btn.disabled = false; }
   });
-  return staffAuthPage("Espace staff", "Reçois les commandes, gère les tasses et les portefeuilles.", [
-    form, h("div", { class: "divider" }),
-    h("div", { class: "row between" }, [
-      h("a", { class: "btn link", href: "#forgot" }, "Mot de passe oublié ?"),
-      h("a", { class: "btn", href: "#staff_register" }, "Créer un compte staff"),
+  return h("div", {}, [
+    brandHeader([h("a", { class: "btn sm", href: "#login" }, "Espace client")]),
+    h("main", { class: "wrap narrow" }, [
+      h("img", { class: "authLogo", src: "/logo.png", alt: "" }),
+      h("h2", { class: "authTitle" }, "Espace staff"),
+      h("p", { class: "muted", style: "text-align:center" }, "Reçois les commandes, gère les tasses et les portefeuilles."),
+      h("div", { class: "card" }, form),
     ]),
-  ]);
-}
-
-function renderStaffRegister() {
-  const err = errBox();
-  const name = h("input", { autocomplete: "name", placeholder: "Ton nom", required: true, maxlength: "80" });
-  const email = h("input", { type: "email", autocomplete: "email", placeholder: "Courriel", required: true });
-  const pass = h("input", { type: "password", autocomplete: "new-password", placeholder: "Au moins 8 caractères", required: true, minlength: "8" });
-  const pass2 = h("input", { type: "password", autocomplete: "new-password", placeholder: "Répète le mot de passe", required: true });
-  const code = h("input", { placeholder: "Code remis par le café", autocomplete: "off", required: true });
-  const btn = h("button", { class: "btn primary block", type: "submit" }, "Créer mon compte staff");
-  const form = h("form", {}, [
-    h("label", {}, "Nom"), name, h("label", {}, "Courriel"), email,
-    h("label", {}, "Mot de passe"), pass, h("label", {}, "Confirmer le mot de passe"), pass2,
-    h("label", {}, "Code d'accès staff"), code,
-    h("div", { style: "margin-top:16px" }, btn), err,
-  ]);
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault(); err.classList.remove("show");
-    if (pass.value !== pass2.value) return showErr(err, "Les deux mots de passe ne sont pas identiques.");
-    btn.disabled = true;
-    try {
-      const r = await sb.auth.signUp({ email: email.value.trim(), password: pass.value, options: { data: { name: name.value.trim(), location: "" } } });
-      if (r.error) throw r.error;
-      if (!r.data.session) { toast("Compte créé. Confirme ton courriel, puis connecte-toi à l'espace staff avec ton code.", "good"); return go("staff"); }
-      State.session = r.data.session;
-      const ok = await claimStaff(code.value.trim());
-      if (ok) await afterStaffClaim();
-      else { toast("Compte créé, mais le code d'accès est invalide. Réessaie le code.", "bad"); go("staff"); }
-    } catch (ex) { showErr(err, errText(ex, "Création impossible.")); }
-    finally { btn.disabled = false; }
-  });
-  return staffAuthPage("Créer un compte staff", "Pour les gens qui préparent les commandes au café.", [
-    form, h("div", { class: "divider" }), h("a", { class: "btn link", href: "#staff" }, "← J'ai déjà un compte"),
-  ]);
-}
-
-function renderStaffClaim() {
-  const err = errBox();
-  const code = h("input", { placeholder: "Code remis par le café", autocomplete: "off", required: true });
-  const btn = h("button", { class: "btn primary block", type: "submit" }, "Activer l'accès staff");
-  const form = h("form", {}, [h("label", {}, "Code d'accès staff"), code, h("div", { style: "margin-top:16px" }, btn), err]);
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault(); err.classList.remove("show"); btn.disabled = true;
-    try {
-      const ok = await claimStaff(code.value.trim());
-      if (!ok) return showErr(err, "Code invalide.");
-      await afterStaffClaim();
-    } catch (ex) { showErr(err, errText(ex, "Activation impossible.")); }
-    finally { btn.disabled = false; }
-  });
-  return staffAuthPage("Accès staff", "Entre le code d'accès pour activer l'espace staff sur ton compte (" + (State.profile.email || "") + ").", [
-    form, h("div", { class: "divider" }),
-    h("div", { class: "row between" }, [h("a", { class: "btn link", href: "#order" }, "← Retour"), h("button", { class: "btn sm", type: "button", onClick: () => signOut() }, "Changer de compte")]),
   ]);
 }
 
@@ -537,18 +468,8 @@ function renderStaffSettings() {
   const s = State.settings;
   const lowInput = h("input", { type: "number", step: "0.5", min: "0", value: String(s.low_balance_cents / 100), style: "max-width:120px" });
   const creditInput = h("input", { type: "number", step: "1", min: "0", value: String((s.credit_limit_cents || 0) / 100), style: "max-width:120px" });
-  const teamBox = h("div", {}, h("div", { class: "spinner" }));
-  loadStaffTeam().then((team) => {
-    teamBox.innerHTML = "";
-    team.forEach((m) => teamBox.appendChild(h("div", { class: "userRow" }, [
-      h("div", { class: "meta" }, [h("b", {}, m.name), h("small", {}, m.email || "")]),
-      m.id === State.profile.id ? h("span", { class: "pill" }, "Toi") : h("button", { class: "btn sm bad", type: "button", onClick: async () => {
-        if (!(await confirmDialog("Retirer l'accès staff ?", m.name + " redeviendra un client normal.", "Retirer", "Annuler", true))) return;
-        try { await staffSetRole(m.id, false); toast("Accès retiré", "good"); render(); } catch (e) { toast(errText(e), "bad"); }
-      } }, "Retirer l'accès"),
-    ])));
-  }).catch(() => { teamBox.textContent = "Impossible de charger l'équipe."; });
-  const codeInput = h("input", { placeholder: "Nouveau code d'accès (6 caractères min.)", autocomplete: "off" });
+  const newPass = h("input", { type: "password", autocomplete: "new-password", placeholder: "Nouveau mot de passe staff (8 caractères min.)" });
+  const newPass2 = h("input", { type: "password", autocomplete: "new-password", placeholder: "Répète le nouveau mot de passe" });
   const content = h("div", { class: "grid2 even" }, [
     h("div", { class: "card" }, [
       h("h2", {}, "Commandes"),
@@ -576,13 +497,16 @@ function renderStaffSettings() {
       h("p", { class: "muted small" }, "Sur iPad/iPhone : ouvre le site dans Safari → Partager → « Sur l'écran d'accueil », puis lance l'app depuis l'icône."),
     ]),
   ]);
-  const teamCard = h("div", { class: "card" }, [
-    h("h2", {}, "Équipe staff"),
-    h("p", { class: "muted small" }, "Les employés créent leur compte eux-mêmes (Espace staff > Créer un compte staff) avec le code d'accès. Change le code si quelqu'un d'externe l'a obtenu, puis retire les accès non désirés."),
-    h("div", { class: "row" }, [codeInput, h("button", { class: "btn sm good", type: "button", onClick: async () => {
-      try { await staffSetCode(codeInput.value); codeInput.value = ""; toast("Code d'accès modifié ✅", "good"); } catch (e) { toast(errText(e), "bad"); }
-    } }, "Changer le code")]),
-    h("div", { class: "divider" }), teamBox,
+  const passCard = h("div", { class: "card" }, [
+    h("h2", {}, "Mot de passe staff"),
+    h("p", { class: "muted small" }, "Ce mot de passe est partagé par tous les membres du café : quiconque le connaît peut entrer dans l'espace staff. Change-le si quelqu'un d'externe l'a obtenu ; les appareils déjà connectés restent connectés jusqu'à leur déconnexion."),
+    newPass, h("div", { style: "height:8px" }), newPass2,
+    h("div", { style: "margin-top:10px" }, h("button", { class: "btn good", type: "button", onClick: async () => {
+      if (newPass.value.length < 8) return toast("8 caractères minimum.", "bad");
+      if (newPass.value !== newPass2.value) return toast("Les deux mots de passe ne sont pas identiques.", "bad");
+      try { const r = await sb.auth.updateUser({ password: newPass.value }); if (r.error) throw r.error; newPass.value = ""; newPass2.value = ""; toast("Mot de passe staff modifié ✅", "good"); }
+      catch (e) { toast(errText(e, "Modification impossible."), "bad"); }
+    } }, "Changer le mot de passe")),
   ]);
-  return staffShell("staff_settings", [content, teamCard]);
+  return staffShell("staff_settings", [content, passCard]);
 }

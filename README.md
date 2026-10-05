@@ -9,19 +9,19 @@ Site statique (HTML + JS vanilla) + 2 petites fonctions Vercel (`api/`) + backen
 panier, portefeuille (solde + historique, **solde négatif permis jusqu'à un découvert maximal**), fidélité
 10 achetées = 1 gratuite, photo de profil (facultative), notifications push (commande prête, solde bas).
 
-**Staff** (comptes créés par les employés avec un code d'accès) : commandes en direct (photo, local, pictogrammes),
+**Staff** (un compte universel partagé par tout le café : seul le mot de passe est demandé) : commandes en direct (photo, local, pictogrammes),
 tasses numérotées (auto/manuel/retour), clients (recharge manuelle du portefeuille, photos, historique),
-menu/prix, horaires, rapport mensuel + exports CSV, gestion de l'équipe et du code d'accès. Notification push à chaque commande.
+menu/prix, horaires, rapport mensuel + exports CSV, changement du mot de passe staff. Notification push à chaque commande.
 
 Prix : boisson 2 $, +0,50 $ avec sirop (modifiable). Les prix sont calculés **côté serveur**.
 
 ## Mise en route
-1. **Supabase** (projet dédié) → SQL Editor : exécuter `supabase/schema.sql`, puis `supabase/setup.sql` (code d'accès staff + secret push).
+1. **Supabase** (projet dédié) → SQL Editor : exécuter `supabase/schema.sql`, puis `supabase/setup.sql` (secret push).
 2. **Authentication → URL Configuration** : *Site URL* = `https://cafe-vent-de-douceurs.synccrm.ca`.
 3. **Authentication → Emails → SMTP** : brancher un SMTP (le SMTP par défaut de Supabase est limité à quelques courriels/heure).
 4. `js/config.js` : `SUPABASE_URL`, `SUPABASE_ANON_KEY`.
 5. **Vercel → Environment Variables** : `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `PUSH_SECRET`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`.
-6. Le premier compte staff : « Espace staff → Créer un compte staff » avec le code d'accès.
+6. Compte staff universel : créer l'utilisateur dans Supabase (Authentication → Users → Add user, courriel = `STAFF_EMAIL` de `js/config.js`), puis `update public.vd_profiles set is_staff = true where email = '…';`. Le mot de passe se change ensuite dans Staff → Réglages.
 
 ### Garde-fou « projet Supabase en pause »
 `api/keepalive.js` est appelé chaque jour par Vercel Cron (`vercel.json`) et exécute une vraie requête SQL (`vd_ping`).
@@ -38,6 +38,6 @@ Servis depuis `icons/`. Pour les héberger ailleurs (médiathèque GHL) : rempli
 ```
 node dev/serve.js          # http://localhost:5173
 ```
-`/?mock` = faux backend en mémoire (`marie@ecole.ca / test123`, `staff@ecole.ca / staff123`, code staff `CODE123`).
+`/?mock` = faux backend en mémoire (`marie@ecole.ca / test123`, mot de passe staff `staff123`).
 
 `.vercelignore` exclut `supabase/`, `dev/` et les images sources.

@@ -70,6 +70,7 @@ function iconImg(file, o) {
 const ERRORS_FR = {
   PHOTO_REQUIRED: "Une photo de profil est requise avant de commander. Ajoute-la dans « Mon compte » ou demande au café de le faire.",
   CREDIT_LIMIT_REACHED: "Tu as atteint le découvert maximal autorisé. Passe au café recharger ton portefeuille avant de commander.",
+  BAD_STAFF_PASSWORD: "Mot de passe staff incorrect.",
   TOO_MANY_ATTEMPTS: "Trop d'essais. Réessaie dans 15 minutes.",
   STAFF_CODE_NOT_SET: "Le code d'accès staff n'est pas encore configuré.",
   CODE_TOO_SHORT: "Le code doit contenir au moins 6 caractères.",

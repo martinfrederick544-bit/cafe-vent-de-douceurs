@@ -18,14 +18,14 @@
       { id: "u-marie", email: "marie@ecole.ca", name: "Marie Tremblay", location: "Local 203", photo: null, has_photo: false, is_staff: false, balance_cents: 1000 },
       { id: "u-paul", email: "paul@ecole.ca", name: "Paul Gagnon", location: "Local 105", photo: null, has_photo: false, is_staff: false, balance_cents: 150 },
       { id: "u-lise", email: "lise@ecole.ca", name: "Lise Bouchard", location: "Gym", photo: null, has_photo: false, is_staff: false, balance_cents: 2500 },
-      { id: "u-staff", email: "staff@ecole.ca", name: "Café Vent de douceurs", location: "", photo: null, has_photo: false, is_staff: true, balance_cents: 0 },
+      { id: "u-staff", email: "info@synccrm.ca", name: "Café Vent de douceurs", location: "", photo: null, has_photo: false, is_staff: true, balance_cents: 0 },
     ],
     vd_settings: [{ id: 1, menu, periods, hours: { mon: allP, tue: allP, wed: allP, thu: allP, fri: allP }, cup_count: 12, require_photo: false, low_balance_cents: 400, credit_limit_cents: 1000 }],
     vd_orders: [],
     vd_wallet_tx: [],
     vd_cups: Array.from({ length: 12 }, (_, i) => ({ number: i + 1, status: "available", order_id: null })),
   };
-  const passwords = { "marie@ecole.ca": "test123", "staff@ecole.ca": "staff123", "paul@ecole.ca": "test123" };
+  const passwords = { "marie@ecole.ca": "test123", "info@synccrm.ca": "staff123", "paul@ecole.ca": "test123" };
   let session = null;
   const authCbs = [];
   const rtCbs = [];

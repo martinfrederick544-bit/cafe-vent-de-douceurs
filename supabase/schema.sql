@@ -10,6 +10,13 @@
 --   * Le staff est un compte Auth dont vd_profiles.is_staff = true (voir fin du fichier).
 -- =====================================================================
 
+-- Nettoyage (anciennes versions : code d'accès staff et gestion des rôles, remplacés par un compte staff universel)
+drop function if exists public.vd_claim_staff(text);
+drop function if exists public.vd_staff_set_code(text);
+drop function if exists public.vd_staff_set_role(uuid, boolean);
+drop table if exists public.vd_staff_attempts;
+drop table if exists public.vd_staff_code;
+
 -- ---------------------------------------------------------------------
 -- 1) TABLES
 -- ---------------------------------------------------------------------
@@ -75,20 +82,6 @@ create table if not exists public.vd_wallet_tx (
   created_at     timestamptz not null default now()
 );
 create index if not exists vd_wallet_tx_user_idx on public.vd_wallet_tx(user_id, created_at desc);
-
--- Code d'accès staff (hash SHA-256) : permet à un employé de se promouvoir staff après s'être créé un compte
-create table if not exists public.vd_staff_code (
-  id        int primary key default 1 check (id = 1),
-  code_hash text
-);
-insert into public.vd_staff_code (id, code_hash) values (1, null) on conflict (id) do nothing;
-
-create table if not exists public.vd_staff_attempts (
-  id         bigserial primary key,
-  user_id    uuid not null,
-  ok         boolean not null,
-  created_at timestamptz not null default now()
-);
 
 -- Configuration interne (URL + secret du service de notifications) — jamais lisible côté navigateur
 create table if not exists public.vd_config (
@@ -590,54 +583,6 @@ $$;
 -- ---------------------------------------------------------------------
 -- 6b) STAFF : code d'accès, rôles, ping
 -- ---------------------------------------------------------------------
--- Se promouvoir staff avec le code d'accès (limité à 6 essais ratés / 15 min)
-create or replace function public.vd_claim_staff(p_code text)
-returns boolean language plpgsql security definer set search_path = public as $$
-declare
-  v_uid  uuid := auth.uid();
-  v_hash text;
-begin
-  if v_uid is null then raise exception 'NOT_AUTHENTICATED'; end if;
-  if (select count(*) from public.vd_staff_attempts
-       where user_id = v_uid and not ok and created_at > now() - interval '15 minutes') >= 6 then
-    raise exception 'TOO_MANY_ATTEMPTS';
-  end if;
-  -- limite globale : empêche de contourner la limite par compte en créant plein de comptes
-  if (select count(*) from public.vd_staff_attempts where not ok and created_at > now() - interval '15 minutes') >= 40 then
-    raise exception 'TOO_MANY_ATTEMPTS';
-  end if;
-  select code_hash into v_hash from public.vd_staff_code where id = 1;
-  if v_hash is null then raise exception 'STAFF_CODE_NOT_SET'; end if;
-
-  if encode(sha256(convert_to(coalesce(p_code, ''), 'UTF8')), 'hex') = v_hash then
-    update public.vd_profiles set is_staff = true where id = v_uid;
-    insert into public.vd_staff_attempts (user_id, ok) values (v_uid, true);
-    return true;
-  end if;
-  insert into public.vd_staff_attempts (user_id, ok) values (v_uid, false);
-  return false;
-end;
-$$;
-
-create or replace function public.vd_staff_set_code(p_new text)
-returns void language plpgsql security definer set search_path = public as $$
-begin
-  perform public.vd_require_staff();
-  if length(coalesce(p_new, '')) < 6 then raise exception 'CODE_TOO_SHORT'; end if;
-  update public.vd_staff_code set code_hash = encode(sha256(convert_to(p_new, 'UTF8')), 'hex') where id = 1;
-end;
-$$;
-
--- Retirer / donner l'accès staff à quelqu'un (pas à soi-même)
-create or replace function public.vd_staff_set_role(p_user uuid, p_is_staff boolean)
-returns void language plpgsql security definer set search_path = public as $$
-begin
-  perform public.vd_require_staff();
-  if p_user = auth.uid() then raise exception 'CANNOT_CHANGE_SELF'; end if;
-  update public.vd_profiles set is_staff = p_is_staff where id = p_user;
-end;
-$$;
-
 -- Ping public (garde le projet Supabase actif : appelé chaque jour par Vercel Cron)
 create or replace function public.vd_ping()
 returns timestamptz language sql stable security definer set search_path = public as $$
@@ -764,8 +709,6 @@ alter table public.vd_orders             enable row level security;
 alter table public.vd_cups               enable row level security;
 alter table public.vd_wallet_tx          enable row level security;
 alter table public.vd_push_subscriptions enable row level security;
-alter table public.vd_staff_code         enable row level security;
-alter table public.vd_staff_attempts     enable row level security;
 alter table public.vd_config             enable row level security;
 
 drop policy if exists vd_profiles_select on public.vd_profiles;
@@ -788,9 +731,7 @@ create policy vd_wallet_tx_select on public.vd_wallet_tx for select to authentic
 
 -- Aucune écriture directe : tout passe par les fonctions ci-dessus
 revoke all on public.vd_profiles, public.vd_settings, public.vd_orders, public.vd_cups,
-              public.vd_wallet_tx, public.vd_push_subscriptions, public.vd_staff_code,
-              public.vd_staff_attempts, public.vd_config from anon, authenticated;
-revoke all on sequence public.vd_staff_attempts_id_seq from anon, authenticated;
+              public.vd_wallet_tx, public.vd_push_subscriptions, public.vd_config from anon, authenticated;
 revoke all on sequence public.vd_wallet_tx_id_seq from anon, authenticated;
 grant select on public.vd_profiles, public.vd_settings, public.vd_orders, public.vd_cups, public.vd_wallet_tx to authenticated;
 
@@ -807,7 +748,7 @@ grant execute on function
   public.vd_staff_topup(uuid, int, text), public.vd_staff_set_photo(uuid, text),
   public.vd_staff_update_user(uuid, text, text), public.vd_staff_save_setting(text, jsonb),
   public.vd_staff_report(date, date), public.vd_save_push(text, text, text, text),
-  public.vd_unsave_push(text), public.vd_claim_staff(text), public.vd_staff_set_code(text), public.vd_staff_set_role(uuid, boolean)
+  public.vd_unsave_push(text)
 to authenticated;
 grant execute on function public.vd_ping(), public.vd_push_prune(text, text[]) to anon, authenticated;
 
@@ -827,5 +768,6 @@ end $$;
 
 -- ---------------------------------------------------------------------
 -- 9) DÉMARRAGE : à exécuter UNE fois après ce fichier (voir supabase/setup.sql)
---    code d'accès staff, compte développeur, URL/secret des notifications push
+--    URL/secret des notifications push, puis création du compte staff universel
+--    (Authentication > Users > Add user, puis : update public.vd_profiles set is_staff = true where email = '...';)
 -- ---------------------------------------------------------------------
