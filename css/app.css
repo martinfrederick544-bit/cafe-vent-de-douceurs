@@ -1,18 +1,18 @@
 /* Café Vent de douceurs express — thème café clair (crème / espresso / sauge) */
 :root {
   color-scheme: light;
-  --bg: #f7f6f3;
-  --bg2: #eeebe5;
-  --surface: #ffffff;
-  --surface2: #faf9f6;
-  --stroke: rgba(60, 42, 28, .10);
-  --stroke2: rgba(60, 42, 28, .18);
+  --bg: #efe6d3;
+  --bg2: #e5d9c0;
+  --surface: #fffdf8;
+  --surface2: #f6eedd;
+  --stroke: rgba(92, 66, 38, .14);
+  --stroke2: rgba(92, 66, 38, .24);
   --espresso: #3a2a1c;
   --brown: #8a5a3a;
   --caramel: #c4773b;
   --sage: #4a7c5f;
   --text: #2b2118;
-  --muted: #7d7165;
+  --muted: #6e6152;
   --good: #3d7a5c;
   --good-bg: rgba(61, 122, 92, .10);
   --bad: #b4413a;
@@ -21,7 +21,7 @@
   --warn-bg: rgba(214, 158, 46, .13);
   --info-bg: rgba(196, 119, 59, .09);
   --radius: 16px;
-  --shadow: 0 1px 2px rgba(40, 28, 18, .04), 0 4px 16px rgba(40, 28, 18, .06);
+  --shadow: 0 1px 2px rgba(70, 48, 22, .06), 0 6px 18px rgba(70, 48, 22, .08);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
