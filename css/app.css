@@ -183,6 +183,8 @@ input[type="file"] { padding: 9px; }
 .drinkCard .pic { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #3b3523; }
 .drinkCard .cap { padding: 9px 11px 11px; display: flex; justify-content: space-between; gap: 6px; align-items: center; }
 .drinkCard .cap b { font-size: .92rem; }
+.drinkCard .cap { flex-wrap: wrap; row-gap: 4px; }
+.drinkCard .cap .pill { white-space: nowrap; flex: 0 0 auto; }
 .drinkCard.off { opacity: .45; pointer-events: none; }
 
 .optGrid { display: grid; gap: 10px; grid-template-columns: repeat(2, 1fr); }
