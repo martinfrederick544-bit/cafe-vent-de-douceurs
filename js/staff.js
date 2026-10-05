@@ -392,7 +392,8 @@ function renderStaffHours() {
     try { await staffSaveSetting("periods", periods); await loadSettings(); toast("Périodes enregistrées ✅", "good"); render(); } catch (e) { toast(errText(e), "bad"); }
   } }, "Enregistrer les heures des périodes");
 
-  return staffShell("staff_hours", [h("div", { class: "grid2 even" }, [
+  const unset = !timedPeriods().length;
+  return staffShell("staff_hours", [unset ? h("div", { class: "banner" }, [h("b", {}, "Heures des périodes non renseignées. "), "Tant qu'elles sont vides, le café est considéré ouvert en tout temps (aucun message « fermé »). Entre les heures de chaque période dans la carte de droite, puis enregistre."]) : null, h("div", { class: "grid2 even" }, [
     h("div", { class: "card" }, [h("h2", {}, "Jours et périodes d'ouverture"), h("p", { class: "muted small" }, "Active les périodes où le café est ouvert. Hors de ces périodes, les clients voient « fermé » mais peuvent quand même commander pour la prochaine ouverture."), grid]),
     h("div", { class: "card" }, [h("h2", {}, "Heures des périodes"), h("p", { class: "muted small" }, "À ajuster selon l'horaire de l'école."), h("div", {}, perRows), h("div", { style: "margin-top:10px" }, savePer)]),
   ])]);

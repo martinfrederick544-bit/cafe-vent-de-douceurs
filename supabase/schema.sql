@@ -102,7 +102,7 @@ create table if not exists public.vd_push_subscriptions (
 
 -- ---------------------------------------------------------------------
 -- 2) RÉGLAGES PAR DÉFAUT (menu de lancement, périodes, horaires)
---    Les périodes/horaires sont ceux du template Brenda : À CONFIRMER avec l'école.
+--    6 périodes ; les heures sont à renseigner par l'école (Staff > Horaires). Tant qu'elles sont vides, le café est considéré ouvert en tout temps.
 -- ---------------------------------------------------------------------
 insert into public.vd_settings (id, menu, periods, hours)
 values (
@@ -130,15 +130,16 @@ values (
   $menu$::jsonb,
   $per$
   [
-    {"k":"P1","start":"08:50","end":"09:50"},
-    {"k":"P2","start":"09:54","end":"10:54"},
-    {"k":"P3","start":"10:58","end":"11:58"},
-    {"k":"P4","start":"12:48","end":"13:48"},
-    {"k":"P5","start":"13:52","end":"14:52"}
+    {"k":"P1","start":"","end":""},
+    {"k":"P2","start":"","end":""},
+    {"k":"P3","start":"","end":""},
+    {"k":"P4","start":"","end":""},
+    {"k":"P5","start":"","end":""},
+    {"k":"P6","start":"","end":""}
   ]
   $per$::jsonb,
   $hrs$
-  {"mon":["P1","P2","P3","P4","P5"],"tue":["P1","P2","P3","P4","P5"],"wed":["P1","P2","P3","P4","P5"],"thu":["P1","P2","P3","P4","P5"],"fri":["P1","P2","P3","P4","P5"]}
+  {"mon":["P1","P2","P3","P4","P5","P6"],"tue":["P1","P2","P3","P4","P5","P6"],"wed":["P1","P2","P3","P4","P5","P6"],"thu":["P1","P2","P3","P4","P5","P6"],"fri":["P1","P2","P3","P4","P5","P6"]}
   $hrs$::jsonb
 )
 on conflict (id) do nothing;

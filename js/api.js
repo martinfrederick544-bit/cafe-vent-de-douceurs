@@ -183,19 +183,26 @@ function pushErrorText(e) {
 /* ---------- horaires ---------- */
 const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri"];
 const DAY_LABELS = { mon: "Lundi", tue: "Mardi", wed: "Mercredi", thu: "Jeudi", fri: "Vendredi" };
+/** Minutes depuis minuit pour "HH:MM", ou null si l'heure n'est pas (encore) renseignée. */
+function hhmmToMin(v) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(v || ""));
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+function timedPeriods() {
+  return ((State.settings && State.settings.periods) || []).filter((p) => hhmmToMin(p.start) !== null && hhmmToMin(p.end) !== null);
+}
 function currentPeriodKey() {
-  const periods = (State.settings && State.settings.periods) || [];
   const now = new Date();
   const min = now.getHours() * 60 + now.getMinutes();
-  for (const p of periods) {
-    const [sh, sm] = String(p.start).split(":").map(Number);
-    const [eh, em] = String(p.end).split(":").map(Number);
-    if (min >= sh * 60 + sm && min <= eh * 60 + em) return p.k;
+  for (const p of timedPeriods()) {
+    if (min >= hhmmToMin(p.start) && min <= hhmmToMin(p.end)) return p.k;
   }
   return null;
 }
 function isCafeOpenNow() {
   if (!State.settings) return true;
+  // heures des périodes pas encore renseignées → aucune restriction (pas de faux message « fermé »)
+  if (!timedPeriods().length) return true;
   const day = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][new Date().getDay()];
   if (!DAY_KEYS.includes(day)) return false;
   const cur = currentPeriodKey();
