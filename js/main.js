@@ -132,7 +132,7 @@ function clearSession() {
   State.session = null; State.profile = null; State.myOrders = []; State.myTx = []; State.staffOrders = []; State.users = [];
   State.loyalty = { paid: 0, free_used: 0, progress: 0, available: 0 };
   UI.cart = []; saveCart(); UI.draft = { location: "", comment: "", mode: "deliver", useFree: false };
-  StaffUI.report = null; StaffUI.menuDraft = null;
+  StaffUI.report = null; StaffUI.reportTried = false; StaffUI.menuDraft = null;
 }
 async function signOut() {
   await unsubscribePushForThisDevice();

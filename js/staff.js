@@ -5,7 +5,7 @@
 
 const StaffUI = {
   userSearch: "", userFilter: "all", userLimit: 60,
-  report: null, reportMonth: todayKey().slice(0, 7), reportBusy: false,
+  report: null, reportMonth: todayKey().slice(0, 7), reportBusy: false, reportTried: false,
   menuDraft: null,
 };
 
@@ -414,6 +414,8 @@ async function loadReport() {
 }
 function renderStaffReport() {
   const r = StaffUI.report;
+  // chargement automatique à l'ouverture de l'onglet (une seule tentative, « Actualiser » permet de réessayer)
+  if (!r && !StaffUI.reportBusy && !StaffUI.reportTried) { StaffUI.reportTried = true; setTimeout(loadReport, 0); }
   const monthInput = h("input", { type: "month", value: StaffUI.reportMonth, style: "max-width:200px", onChange: (e) => { StaffUI.reportMonth = e.target.value || StaffUI.reportMonth; StaffUI.report = null; loadReport(); } });
   const body = [];
   if (StaffUI.reportBusy) body.push(h("div", { class: "spinner" }));
