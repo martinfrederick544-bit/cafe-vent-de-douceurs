@@ -63,7 +63,7 @@ function brandHeader(rightEls) {
       h("img", { src: "/logo.png", alt: "" }),
       h("div", { style: "min-width:0" }, [h("h1", {}, "Café Vent de douceurs"), h("p", {}, "express")]),
     ]),
-    h("div", { class: "topActions" }, rightEls || []),
+    h("div", { class: "topActions" }, [].concat(rightEls || [], [h("button", { class: "iconBtn helpBtn", type: "button", "aria-label": "Aide", title: "Aide", onClick: () => openHelp() }, "?")])),
   ]);
 }
 

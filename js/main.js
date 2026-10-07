@@ -79,6 +79,7 @@ function render() {
   const keepScroll = window.scrollY;
   root.replaceChildren(node);
   window.scrollTo(0, keepScroll);
+  if (typeof maybeShowIntro === "function") maybeShowIntro();
 }
 /** Rendu différé si l'utilisateur est en train de taper (évite de perdre le focus). */
 function scheduleRender() {

@@ -584,6 +584,36 @@ $$;
 -- ---------------------------------------------------------------------
 -- 6b) STAFF : code d'accès, rôles, ping
 -- ---------------------------------------------------------------------
+-- Assistant d'aide : limite d'utilisation par jour (évite abus et coûts imprévus)
+create table if not exists public.vd_help_usage (
+  user_id uuid not null references public.vd_profiles(id) on delete cascade,
+  day     date not null,
+  n       int  not null default 0,
+  primary key (user_id, day)
+);
+
+-- Appelée par /api/help avec le jeton de l'utilisateur : compte la question, applique la limite quotidienne
+-- (30 questions pour un client, 100 pour le compte staff partagé) et retourne le rôle.
+create or replace function public.vd_help_check()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_uid   uuid := auth.uid();
+  v_staff boolean;
+  v_today date := (now() at time zone 'America/Toronto')::date;
+  v_n     int;
+begin
+  if v_uid is null then raise exception 'NOT_AUTHENTICATED'; end if;
+  select is_staff into v_staff from public.vd_profiles where id = v_uid;
+  if v_staff is null then raise exception 'NO_PROFILE'; end if;
+  insert into public.vd_help_usage (user_id, day, n) values (v_uid, v_today, 1)
+  on conflict (user_id, day) do update set n = public.vd_help_usage.n + 1
+  returning n into v_n;
+  delete from public.vd_help_usage where day < v_today - 7;
+  if v_n > (case when v_staff then 100 else 30 end) then raise exception 'HELP_LIMIT'; end if;
+  return jsonb_build_object('is_staff', v_staff, 'used', v_n);
+end;
+$$;
+
 -- Ping public (garde le projet Supabase actif : appelé chaque jour par Vercel Cron)
 create or replace function public.vd_ping()
 returns timestamptz language sql stable security definer set search_path = public as $$
@@ -710,6 +740,7 @@ alter table public.vd_orders             enable row level security;
 alter table public.vd_cups               enable row level security;
 alter table public.vd_wallet_tx          enable row level security;
 alter table public.vd_push_subscriptions enable row level security;
+alter table public.vd_help_usage         enable row level security;
 alter table public.vd_config             enable row level security;
 
 drop policy if exists vd_profiles_select on public.vd_profiles;
@@ -732,7 +763,7 @@ create policy vd_wallet_tx_select on public.vd_wallet_tx for select to authentic
 
 -- Aucune écriture directe : tout passe par les fonctions ci-dessus
 revoke all on public.vd_profiles, public.vd_settings, public.vd_orders, public.vd_cups,
-              public.vd_wallet_tx, public.vd_push_subscriptions, public.vd_config from anon, authenticated;
+              public.vd_wallet_tx, public.vd_push_subscriptions, public.vd_config, public.vd_help_usage from anon, authenticated;
 revoke all on sequence public.vd_wallet_tx_id_seq from anon, authenticated;
 grant select on public.vd_profiles, public.vd_settings, public.vd_orders, public.vd_cups, public.vd_wallet_tx to authenticated;
 
@@ -749,7 +780,7 @@ grant execute on function
   public.vd_staff_topup(uuid, int, text), public.vd_staff_set_photo(uuid, text),
   public.vd_staff_update_user(uuid, text, text), public.vd_staff_save_setting(text, jsonb),
   public.vd_staff_report(date, date), public.vd_save_push(text, text, text, text),
-  public.vd_unsave_push(text)
+  public.vd_unsave_push(text), public.vd_help_check()
 to authenticated;
 grant execute on function public.vd_ping(), public.vd_push_prune(text, text[]) to anon, authenticated;
 
