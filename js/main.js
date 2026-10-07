@@ -42,7 +42,7 @@ function buildScreen() {
 
   if (!State.session) {
     if (r.startsWith("staff")) return renderStaffLogin();
-    if (r.startsWith("livraison")) return renderDeliveryLogin();
+    if (r.startsWith("livraison")) return renderStaffLogin();
     if (r === "register") return renderRegister();
     if (r === "forgot") return renderForgot();
     return renderLogin();
@@ -52,7 +52,7 @@ function buildScreen() {
 
   if (r === "reset") return renderReset();
   if (p.is_delivery || (r.startsWith("livraison") && p.is_staff)) return renderDelivery();
-  if (r.startsWith("livraison")) return renderDeliveryLogin();
+  if (r.startsWith("livraison")) return renderStaffLogin();
   if (r.startsWith("staff")) {
     if (!p.is_staff) return renderStaffLogin();
     switch (r) {
