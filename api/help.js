@@ -121,8 +121,10 @@ async function discoverModels(key) {
 async function askGemini(key, system, msgs) {
   const configured = (process.env.GEMINI_MODELS ? process.env.GEMINI_MODELS.split(",").map((x) => x.trim()).filter(Boolean) : DEFAULT_MODELS);
   const tried = new Set();
+  const infos = [];
   const attempt = async (model) => {
     tried.add(model);
+    const t0 = Date.now();
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: "POST", signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -133,10 +135,12 @@ async function askGemini(key, system, msgs) {
           generationConfig: { maxOutputTokens: 900, temperature: 0.3 },
         }),
       });
-      if (!r.ok) { console.error("gemini", model, r.status, (await r.text()).slice(0, 160)); return ""; }
+      if (!r.ok) { const body = (await r.text()).slice(0, 160); console.error("gemini", model, r.status, body); infos.push(`${model}: HTTP ${r.status} (${Date.now() - t0} ms) ${body.slice(0, 80)}`); return ""; }
       const out = await r.json();
-      return ((out.candidates?.[0]?.content?.parts || [])).filter((p) => !p.thought).map((p) => p.text || "").join("").trim();
-    } catch (e) { console.error("gemini", model, String(e)); return ""; }
+      const text = ((out.candidates?.[0]?.content?.parts || [])).filter((p) => !p.thought).map((p) => p.text || "").join("").trim();
+      if (!text) infos.push(`${model}: réponse vide, finish=${out.candidates?.[0]?.finishReason || "?"}, bloqué=${out.promptFeedback?.blockReason || "non"} (${Date.now() - t0} ms)`);
+      return text;
+    } catch (e) { console.error("gemini", model, String(e)); infos.push(`${model}: ${String(e).slice(0, 60)} (${Date.now() - t0} ms)`); return ""; }
   };
 
   // Requêtes « couvertes » : le 1er modèle part tout de suite ; si il est lent, le suivant part 2,5 s plus tard (puis un 3e à 5 s).
@@ -158,12 +162,12 @@ async function askGemini(key, system, msgs) {
     setTimeout(launch, 2500); setTimeout(launch, 5000);
     setTimeout(() => finish(""), 14000);
   });
-  if (hedged) return hedged;
+  if (hedged) return { text: hedged, infos };
 
   // Dernier recours : les modèles configurés ont peut-être été retirés → on découvre ceux qui existent.
-  if (Date.now() - t0 > 9000) return ""; // déjà trop long : on rend la main
-  for (const m of (await discoverModels(key)).slice(0, 1)) { if (tried.has(m)) continue; const t = await attempt(m); if (t) return t; }
-  return "";
+  if (Date.now() - t0 > 9000) return { text: "", infos }; // déjà trop long : on rend la main
+  for (const m of (await discoverModels(key)).slice(0, 1)) { if (tried.has(m)) continue; const t = await attempt(m); if (t) return { text: t, infos }; }
+  return { text: "", infos };
 }
 
 async function handler(req, res) {
@@ -188,8 +192,9 @@ async function handler(req, res) {
 
   const live = liveInfo(await loadSettings(token));
   const system = BASE + live + (who.staff ? STAFF : CLIENT_NOTE);
-  let reply = await askGemini(key, system, msgs);
-  if (!reply) return json(res, 502, { error: "L'assistant est indisponible pour le moment. Réessaie dans une minute ou consulte la FAQ." });
+  const got = await askGemini(key, system, msgs);
+  let reply = got.text;
+  if (!reply) return json(res, 502, { error: "L'assistant est indisponible pour le moment. Réessaie dans une minute ou consulte la FAQ.", ...(who.staff ? { detail: got.infos } : {}) });
   reply = reply.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/(^|\s)\*([^*\n]+)\*/g, "$1$2").replace(/^#+\s*/gm, "");
   return json(res, 200, { reply });
 }
