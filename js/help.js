@@ -164,11 +164,11 @@ async function helpSend(preset) {
 function refreshHelpChat() { const b = $("#helpBody"); if (b && Help.tab === "chat") renderHelpChat(b); }
 
 /* ---------- visite guidée (première connexion, une fois par appareil et par compte) ---------- */
-let _introChecked = false;
+let _introFor = null; // identifiant du compte pour lequel la visite a déjà été vérifiée (change si on se reconnecte avec un autre compte)
 function introKey() { return "vd_intro_" + (State.profile ? State.profile.id : "anon"); }
 function maybeShowIntro() {
-  if (_introChecked || !State.profile || isSheetOpen()) return;
-  _introChecked = true;
+  if (!State.profile || _introFor === State.profile.id || isSheetOpen()) return;
+  _introFor = State.profile.id;
   let seen = false; try { seen = !!localStorage.getItem(introKey()); } catch (_e) {}
   if (!seen) { Help.introIdx = 0; renderIntro(); }
 }
