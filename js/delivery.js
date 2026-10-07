@@ -1,37 +1,6 @@
 /* =========================================================
-   Espace LIVRAISON : 2e groupe, un mot de passe partagé.
-   Voit seulement les commandes « à livrer » (pas les ramassages) et les marque « Livré ».
+   Onglet LIVRAISONS de l'espace staff : seulement les commandes « à livrer » (pas les ramassages), marquées « Livré ».
 ========================================================= */
-
-function renderDeliveryLogin() {
-  const err = errBox();
-  const pass = h("input", { type: "password", autocomplete: "current-password", placeholder: "Mot de passe livraison", required: true, autofocus: true });
-  const btn = h("button", { class: "btn primary block", type: "submit" }, "Entrer dans l'espace livraison");
-  const form = h("form", {}, [h("label", {}, "Mot de passe livraison"), pass, h("div", { style: "margin-top:16px" }, btn), err]);
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault(); err.classList.remove("show"); btn.disabled = true;
-    try {
-      await unsubscribePushForThisDevice();
-      const r = await sb.auth.signInWithPassword({ email: VD.DELIVERY_EMAIL, password: pass.value });
-      if (r.error) throw new Error(/invalid login/i.test(r.error.message) ? "BAD_DELIVERY_PASSWORD" : r.error.message);
-      State.session = r.data.session;
-      await loadProfile();
-      if (!State.profile || !State.profile.is_delivery) { await sb.auth.signOut(); throw new Error("NOT_DELIVERY"); }
-      await loadDelivery().catch(() => {});
-      go("livraison");
-    } catch (ex) { showErr(err, errText(ex, "Connexion impossible.")); }
-    finally { btn.disabled = false; }
-  });
-  return h("div", {}, [
-    brandHeader([h("a", { class: "btn sm", href: "#login" }, "Espace client")]),
-    h("main", { class: "wrap narrow" }, [
-      h("img", { class: "authLogo", src: "/logo.png", alt: "" }),
-      h("h2", { class: "authTitle" }, "Espace livraison"),
-      h("p", { class: "muted", style: "text-align:center" }, "Vois les cafés à livrer et marque-les « Livré »."),
-      h("div", { class: "card" }, form),
-    ]),
-  ]);
-}
 
 function deliveryCard(o) {
   const done = !!o.delivered_at;
@@ -64,19 +33,19 @@ function deliveryCard(o) {
   ]);
 }
 
-function renderDelivery() {
-  const isStaff = State.profile && State.profile.is_staff;
-  const top = brandHeader([
-    isStaff ? h("a", { class: "btn sm", href: "#staff" }, "Espace staff") : null,
-    h("button", { class: "btn sm", type: "button", onClick: () => signOut() }, "Déconnexion"),
-  ]);
+function renderStaffDelivery() {
   const todo = State.delivery.filter((o) => !o.delivered_at);
   const done = State.delivery.filter((o) => o.delivered_at);
-  const nb = notifBanner("delivery");
-  return h("div", {}, [top, h("main", { class: "wrap narrow" }, [
-    nb,
+  const alerts = (pushSupported() && "PushManager" in window) ? h("div", { class: "banner" }, [
+    "Reçois une notification « Café à livrer » quand une commande en livraison est complétée. ",
+    h("div", { class: "row", style: "margin-top:8px" }, h("button", { class: "btn sm primary", type: "button", onClick: async () => {
+      try { await enablePush("delivery"); toast("Alertes de livraison activées sur cet appareil ✅", "good"); } catch (e) { toast(pushErrorText(e), "bad"); }
+    } }, "🔔 Activer les alertes de livraison sur cet appareil")),
+  ]) : null;
+  return staffShell("staff_delivery", [
+    alerts,
     h("div", { class: "colHead" }, [h("h2", { style: "margin:0" }, "À livrer"), h("span", { class: "count" }, String(todo.length))]),
-    todo.length ? todo.map(deliveryCard) : h("div", { class: "card muted" }, "Rien à livrer pour le moment ☕"),
-    done.length ? [h("div", { class: "colHead", style: "margin-top:22px" }, [h("h2", { style: "margin:0" }, "Livrées récemment"), h("span", { class: "count" }, String(done.length))]), done.map(deliveryCard)] : null,
-  ])]);
+    h("div", { class: "delivList" }, todo.length ? todo.map(deliveryCard) : h("div", { class: "card muted" }, "Rien à livrer pour le moment ☕")),
+    done.length ? [h("div", { class: "colHead", style: "margin-top:22px" }, [h("h2", { style: "margin:0" }, "Livrées récemment"), h("span", { class: "count" }, String(done.length))]), h("div", { class: "delivList" }, done.map(deliveryCard))] : null,
+  ]);
 }

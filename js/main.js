@@ -42,7 +42,7 @@ function buildScreen() {
 
   if (!State.session) {
     if (r.startsWith("staff")) return renderStaffLogin();
-    if (r.startsWith("livraison")) return renderStaffLogin();
+    if (r === "livraison") return renderStaffLogin();
     if (r === "register") return renderRegister();
     if (r === "forgot") return renderForgot();
     return renderLogin();
@@ -51,11 +51,11 @@ function buildScreen() {
   if (!State.settings) return h("div", {}, h("div", { class: "spinner" }));
 
   if (r === "reset") return renderReset();
-  if (p.is_delivery || (r.startsWith("livraison") && p.is_staff)) return renderDelivery();
-  if (r.startsWith("livraison")) return renderStaffLogin();
+  if (r === "livraison") { location.hash = "staff_delivery"; return h("div", {}); }
   if (r.startsWith("staff")) {
     if (!p.is_staff) return renderStaffLogin();
     switch (r) {
+      case "staff_delivery": return renderStaffDelivery();
       case "staff_clients": return renderStaffClients();
       case "staff_cups": return renderStaffCups();
       case "staff_menu": return renderStaffMenu();
@@ -103,7 +103,7 @@ async function loadAll() {
     try {
       await loadClientData();
       if (State.profile && State.profile.is_staff) await Promise.all([loadStaffOrders(), loadCups()]);
-      if (State.profile && State.profile.is_delivery) await loadDelivery();
+      if (State.profile && State.profile.is_staff) await loadDelivery().catch(() => {});
       startRealtime(onRealtime);
       refreshPushSubscription();
     } catch (e) { console.error("Chargement:", e); toast(errText(e, "Chargement impossible. Vérifie ta connexion."), "bad"); }
@@ -124,7 +124,7 @@ async function refreshFromFlags() {
   const staff = State.profile && State.profile.is_staff;
   const jobs = [];
   if (f.vd_settings) jobs.push(loadSettings());
-  if (f.vd_orders) { jobs.push(loadMyOrders(), loadLoyalty()); if (staff) jobs.push(loadStaffOrders()); }
+  if (f.vd_orders) { jobs.push(loadMyOrders(), loadLoyalty()); if (staff) jobs.push(loadStaffOrders()); if (staff && route() === "staff_delivery") jobs.push(loadDelivery()); }
   if (f.vd_cups && staff) jobs.push(loadCups());
   if (f.vd_profiles) { jobs.push(loadProfile(), loadMyTx()); if (staff && route() === "staff_clients") jobs.push(loadUsers()); }
   try { await Promise.all(jobs); } catch (e) { console.warn("Refresh:", e); }
@@ -140,11 +140,10 @@ function clearSession() {
   StaffUI.report = null; StaffUI.reportTried = false; StaffUI.menuDraft = null;
 }
 async function signOut() {
-  const wasDelivery = !!(State.profile && State.profile.is_delivery);
   await unsubscribePushForThisDevice();
   try { await sb.auth.signOut(); } catch (_e) {}
   clearSession();
-  go(wasDelivery ? "livraison" : "login");
+  go("login");
 }
 async function handleAuth(event, session) {
   if (event === "PASSWORD_RECOVERY") State.recovery = true;
@@ -161,10 +160,10 @@ async function handleAuth(event, session) {
 function onRoute() {
   const r = route();
   if (State.session && State.profile) {
-    const home = State.profile.is_delivery ? "livraison" : "order";
+    const home = "order";
     if (AUTH_ROUTES.includes(r) && r !== "reset") { location.hash = home; return; }
     if (r === "") { location.hash = home; return; }
-    if (r === "livraison" && (State.profile.is_delivery || State.profile.is_staff)) loadDelivery().then(scheduleRender).catch(() => {});
+    if (r === "staff_delivery" && State.profile.is_staff) loadDelivery().then(scheduleRender).catch(() => {});
     if (r === "staff_menu") StaffUI.menuDraft = null;
     if (r === "staff_clients" && State.profile.is_staff) loadUsers().then(scheduleRender).catch((e) => toast(errText(e), "bad"));
     if (r === "staff_report" && State.profile.is_staff && !StaffUI.report) { render(); loadReport(); return; }
@@ -195,7 +194,7 @@ async function boot() {
   window.addEventListener("hashchange", onRoute);
   if (!location.hash || /^#(access_token|error|code)=/.test(location.hash)) {
     if (State.recovery && State.session) location.hash = "reset";
-    else history.replaceState(null, "", location.pathname + location.search + (State.session ? (State.profile && State.profile.is_delivery ? "#livraison" : "#order") : "#login"));
+    else history.replaceState(null, "", location.pathname + location.search + (State.session ? "#order" : "#login"));
   }
   render();
 
@@ -204,13 +203,13 @@ async function boot() {
     if (document.hidden || !State.session) return;
     if (State.staffDateAuto !== false) State.staffDate = todayKey();
     try {
-      await Promise.all([loadSettings(), loadProfile(), loadMyOrders(), loadLoyalty(), State.profile && State.profile.is_staff ? Promise.all([loadStaffOrders(), loadCups()]) : null, State.profile && State.profile.is_delivery ? loadDelivery() : null]);
+      await Promise.all([loadSettings(), loadProfile(), loadMyOrders(), loadLoyalty(), State.profile && State.profile.is_staff ? Promise.all([loadStaffOrders(), loadCups()]) : null, State.profile && State.profile.is_staff && route() === "staff_delivery" ? loadDelivery() : null]);
       startRealtime(onRealtime);
     } catch (e) { console.warn("Resume:", e); }
     scheduleRender();
   };
-  // groupe livraison : la liste « à livrer » se rafraîchit toute seule
-  setInterval(() => { if (!document.hidden && State.session && State.profile && State.profile.is_delivery) loadDelivery().then(scheduleRender).catch(() => {}); }, 8000);
+  // onglet Livraisons : la liste « à livrer » se rafraîchit toute seule
+  setInterval(() => { if (!document.hidden && State.session && State.profile && State.profile.is_staff && route() === "staff_delivery") loadDelivery().then(scheduleRender).catch(() => {}); }, 8000);
   document.addEventListener("visibilitychange", onResume);
   window.addEventListener("pageshow", onResume);
   window.addEventListener("online", onResume);

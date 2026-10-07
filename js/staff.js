@@ -10,13 +10,12 @@ const StaffUI = {
 };
 
 const STAFF_TABS = [
-  ["staff", "🧾 Commandes"], ["staff_clients", "👥 Clients"], ["staff_cups", "🥤 Tasses"],
+  ["staff", "🧾 Commandes"], ["staff_delivery", "🛒 Livraisons"], ["staff_clients", "👥 Clients"], ["staff_cups", "🥤 Tasses"],
   ["staff_menu", "📋 Menu"], ["staff_hours", "🕘 Horaires"], ["staff_report", "📊 Rapports"], ["staff_settings", "⚙️ Réglages"],
 ];
 
 function staffShell(active, content) {
   const top = brandHeader([
-    h("a", { class: "btn sm", href: "#livraison" }, "🛒 Livraison"),
     h("a", { class: "btn sm", href: "#order" }, "Espace client"),
     h("button", { class: "btn sm", type: "button", onClick: () => signOut() }, "Déconnexion"),
   ]);
@@ -28,32 +27,21 @@ function staffShell(active, content) {
 /* ---------- connexion staff : un seul mot de passe pour tout le café ---------- */
 function renderStaffLogin() {
   const err = errBox();
-  const pass = h("input", { type: "password", autocomplete: "current-password", placeholder: "Mot de passe (staff ou livraison)", required: true, autofocus: true });
+  const pass = h("input", { type: "password", autocomplete: "current-password", placeholder: "Mot de passe du café", required: true, autofocus: true });
   const btn = h("button", { class: "btn primary block", type: "submit" }, "Entrer");
   const notice = (State.session && State.profile && !State.profile.is_staff)
     ? h("p", { class: "muted small" }, "Tu es connecté·e avec un compte client. Entrer dans l'espace staff te déconnectera de ce compte.") : null;
-  const form = h("form", {}, [notice, h("label", {}, "Mot de passe"), pass, h("div", { style: "margin-top:16px" }, btn), err]);
+  const form = h("form", {}, [notice, h("label", {}, "Mot de passe staff"), pass, h("div", { style: "margin-top:16px" }, btn), err]);
   form.addEventListener("submit", async (e) => {
     e.preventDefault(); err.classList.remove("show"); btn.disabled = true;
     try {
       await unsubscribePushForThisDevice();
-      let r = await sb.auth.signInWithPassword({ email: VD.STAFF_EMAIL, password: pass.value });
-      let asDelivery = false;
-      if (r.error && /invalid login/i.test(r.error.message)) {   // pas le mot de passe staff : essayer celui de la livraison
-        const r2 = await sb.auth.signInWithPassword({ email: VD.DELIVERY_EMAIL, password: pass.value });
-        if (!r2.error) { r = r2; asDelivery = true; }
-      }
+      const r = await sb.auth.signInWithPassword({ email: VD.STAFF_EMAIL, password: pass.value });
       if (r.error) throw new Error(/invalid login/i.test(r.error.message) ? "BAD_STAFF_PASSWORD" : r.error.message);
       State.session = r.data.session;
       await loadProfile();
-      if (asDelivery) {
-        if (!State.profile || !State.profile.is_delivery) { await sb.auth.signOut(); throw new Error("NOT_DELIVERY"); }
-        await loadDelivery().catch(() => {});
-        go("livraison");
-      } else {
-        if (!State.profile || !State.profile.is_staff) { await sb.auth.signOut(); throw new Error("NOT_STAFF"); }
-        go("staff");
-      }
+      if (!State.profile || !State.profile.is_staff) { await sb.auth.signOut(); throw new Error("NOT_STAFF"); }
+      go("staff");
     } catch (ex) { showErr(err, errText(ex, "Connexion impossible.")); }
     finally { btn.disabled = false; }
   });
@@ -61,8 +49,8 @@ function renderStaffLogin() {
     brandHeader([h("a", { class: "btn sm", href: "#login" }, "Espace client")]),
     h("main", { class: "wrap narrow" }, [
       h("img", { class: "authLogo", src: "/logo.png", alt: "" }),
-      h("h2", { class: "authTitle" }, "Espace staff et livraison"),
-      h("p", { class: "muted", style: "text-align:center" }, "Entre le mot de passe du café (staff) ou celui de la livraison."),
+      h("h2", { class: "authTitle" }, "Espace staff"),
+      h("p", { class: "muted", style: "text-align:center" }, "Reçois les commandes, gère les tasses, les livraisons et les portefeuilles."),
       h("div", { class: "card" }, form),
     ]),
   ]);
@@ -606,18 +594,5 @@ function renderStaffSettings() {
       catch (e) { toast(errText(e, "Modification impossible."), "bad"); }
     } }, "Changer le mot de passe")),
   ]);
-  const dPass = h("input", { type: "password", autocomplete: "new-password", placeholder: "Nouveau mot de passe livraison (8 caractères min.)" });
-  const dPass2 = h("input", { type: "password", autocomplete: "new-password", placeholder: "Répète le nouveau mot de passe" });
-  const deliveryPassCard = h("div", { class: "card" }, [
-    h("h2", {}, "Mot de passe livraison"),
-    h("p", { class: "muted small" }, "Le groupe livraison entre dans son espace avec ce mot de passe (même page de connexion que le staff : l'app reconnaît le mot de passe). En le changeant, les appareils du groupe livraison sont déconnectés : donne-leur le nouveau mot de passe."),
-    dPass, h("div", { style: "height:8px" }), dPass2,
-    h("div", { style: "margin-top:10px" }, h("button", { class: "btn sm good", type: "button", onClick: async () => {
-      if (dPass.value.length < 8) return toast("8 caractères minimum.", "bad");
-      if (dPass.value !== dPass2.value) return toast("Les deux mots de passe ne sont pas identiques.", "bad");
-      try { await staffSetDeliveryPassword(dPass.value); dPass.value = ""; dPass2.value = ""; toast("Mot de passe livraison modifié ✅", "good"); }
-      catch (e) { toast(errText(e), "bad"); }
-    } }, "Changer le mot de passe livraison")),
-  ]);
-  return staffShell("staff_settings", [content, passCard, deliveryPassCard]);
+  return staffShell("staff_settings", [content, passCard]);
 }

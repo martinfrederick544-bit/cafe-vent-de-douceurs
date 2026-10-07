@@ -104,7 +104,6 @@ async function staffAssignCup(orderId, cup) { return unwrap(await sb.rpc("vd_sta
 async function staffAssignCups(orderId, count) { return unwrap(await sb.rpc("vd_staff_assign_cups", { p_order_id: orderId, p_count: count })); }
 async function loadDelivery() { State.delivery = unwrap(await sb.rpc("vd_delivery_list")) || []; }
 async function deliveryMark(orderId, delivered) { unwrap(await sb.rpc("vd_delivery_mark", { p_order_id: orderId, p_delivered: delivered !== false })); }
-async function staffSetDeliveryPassword(pw) { unwrap(await sb.rpc("vd_staff_set_delivery_password", { p_password: pw })); }
 async function staffReturnCup(cup) { unwrap(await sb.rpc("vd_staff_return_cup", { p_cup: cup })); }
 async function staffSetCupCount(n) { unwrap(await sb.rpc("vd_staff_set_cup_count", { p_count: n })); }
 async function staffTopup(userId, cents, note) { return unwrap(await sb.rpc("vd_staff_topup", { p_user: userId, p_amount_cents: cents, p_note: note || null })); }

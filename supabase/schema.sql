@@ -720,7 +720,7 @@ begin
         'title', 'Café à livrer 🛒',
         'body',  new.location || ' — ' || new.user_name || case when coalesce(array_length(new.cup_numbers, 1), 0) > 0
                       then ' (tasse n° ' || array_to_string(new.cup_numbers, ', ') || ')' else '' end,
-        'url', '/#livraison', 'tag', 'deliver_' || new.id,
+        'url', '/#staff_delivery', 'tag', 'deliver_' || new.id,
         'subs', public.vd_push_subs('delivery')));
     elsif new.status = 'COMPLÉTÉE' then
       perform public.vd_push_dispatch(jsonb_build_object(
@@ -932,23 +932,8 @@ begin
 end;
 $$;
 
--- Le staff change seul le mot de passe du compte livraison (déconnecte les appareils livraison déjà connectés)
-create or replace function public.vd_staff_set_delivery_password(p_password text)
-returns void language plpgsql security definer set search_path = public, extensions as $$
-declare
-  v_id uuid;
-begin
-  perform public.vd_require_staff();
-  if p_password is null or length(p_password) < 8 or length(p_password) > 72 then raise exception 'WEAK_PASSWORD'; end if;
-  select id into v_id from public.vd_profiles where is_delivery limit 1;
-  if v_id is null then raise exception 'NO_DELIVERY_ACCOUNT'; end if;
-  update auth.users set encrypted_password = crypt(p_password, gen_salt('bf')), updated_at = now() where id = v_id;
-  delete from auth.sessions where user_id = v_id;
-end;
-$$;
+drop function if exists public.vd_staff_set_delivery_password(text);
 
 revoke execute on function public.vd_trg_order_delivered() from public, anon, authenticated;
-revoke execute on function public.vd_is_delivery(), public.vd_delivery_list(), public.vd_delivery_mark(text, boolean),
-  public.vd_staff_set_delivery_password(text) from public, anon, authenticated;
-grant execute on function public.vd_is_delivery(), public.vd_delivery_list(), public.vd_delivery_mark(text, boolean),
-  public.vd_staff_set_delivery_password(text) to authenticated;
+revoke execute on function public.vd_is_delivery(), public.vd_delivery_list(), public.vd_delivery_mark(text, boolean) from public, anon, authenticated;
+grant execute on function public.vd_is_delivery(), public.vd_delivery_list(), public.vd_delivery_mark(text, boolean) to authenticated;
