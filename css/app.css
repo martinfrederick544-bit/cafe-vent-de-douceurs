@@ -355,3 +355,29 @@ table.tbl th { color: var(--muted); font-size: .78rem; font-weight: 700; border-
 button.addon { font-family: inherit; cursor: pointer; color: inherit; }
 button.addon:active { transform: scale(.97); }
 .tbl th { white-space: nowrap; }
+
+/* ---- correctifs iPhone : champs d'heure dans le cadre ---- */
+.perRow { grid-template-columns: 30px minmax(0, 1fr) 12px minmax(0, 1fr); gap: 4px; }
+.perRow input[type="time"] { -webkit-appearance: none; appearance: none; display: block; box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; padding: 8px 4px; text-align: center; font-size: 1rem; min-height: 44px; }
+.perRow input[type="time"]::-webkit-date-and-time-value { text-align: center; margin: 0; }
+.perRow input[type="time"]::-webkit-calendar-picker-indicator { display: none; }
+.card { min-width: 0; }
+
+/* ---- rapport : tableau compact ---- */
+.tbl { font-size: .8rem; width: 100%; }
+.tbl th, .tbl td { padding: 7px 4px; white-space: nowrap; overflow-wrap: normal; }
+.tbl th:first-child, .tbl td:first-child { text-align: left; }
+.tbl th:not(:first-child), .tbl td:not(:first-child) { text-align: right; }
+
+/* ---- ajouts avec image ---- */
+.extraRow { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+.extraMain { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.prodPic.sm { width: 56px; height: 56px; }
+.prodPic.sm img, .prodPic.sm .crop { width: 56px; height: 56px; }
+.prodPic.sm small { font-size: .55rem; }
+
+/* ---- livraison ---- */
+.order.deliv .delivLoc { font-size: 1.25rem; font-weight: 800; margin-top: 2px; }
+.order.deliv.done { opacity: .7; }
+.btn.big { min-height: 56px; font-size: 1.15rem; width: 100%; }
+table.tbl { min-width: 0; font-size: .8rem; } table.tbl th, table.tbl td { padding: 7px 4px; }

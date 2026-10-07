@@ -142,6 +142,8 @@ function staffOrderCard(o) {
     o.comment ? h("div", { class: "banner", style: "margin:8px 0 0" }, "💬 " + o.comment) : null,
     nDrinks > 1 || cups.length ? h("div", { class: "small", style: "margin-top:8px;font-weight:700;color:" + (o.status === "NOUVELLE" && missing ? "var(--warn)" : "var(--muted)") }, `Tasses : ${cups.length} / ${nDrinks} boisson${nDrinks > 1 ? "s" : ""}`) : null,
     cups.length ? h("div", { class: "cups" }, cupChips) : null,
+    o.status === "COMPLÉTÉE" && o.mode === "deliver" ? h("div", { class: "small", style: "margin-top:8px;font-weight:700;color:" + (o.delivered_at ? "var(--good)" : "var(--warn)") },
+      o.delivered_at ? "🛒 Livrée à " + fmtTime(new Date(o.delivered_at).getTime()) : "🛒 En attente de livraison") : null,
     actions,
   ]);
 }
@@ -152,7 +154,7 @@ function staffItemRow(it, count) {
   ADDONS.forEach((a) => { if (it[a.key]) addons.push({ icon: a.icon, label: "×" + it[a.key], title: a.label }); });
   if (it.marshmallows) addons.push({ icon: "guimauves.jpg", label: "", title: "Guimauves" });
   if (it.dairy_free) addons.push({ emoji: "🌱", label: "sans lait", title: "Sans produits laitiers" });
-  (it.extras || []).forEach((e) => addons.push({ emoji: "➕", label: e.name, title: e.name }));
+  (it.extras || []).forEach((e) => addons.push({ icon: e.icon || "", emoji: "➕", label: e.name, title: e.name }));
   return h("div", { class: "itemLine" }, [
     it.icon ? iconImg(it.icon, { class: "big", alt: it.name, onClick: () => openImage(it.icon, it.name) }) : null,
     h("div", { class: "desc" }, [
@@ -350,11 +352,25 @@ function moneyInput(cents, onChange, label) {
 }
 async function uploadMenuImage(file, key) {
   const dataUrl = await resizeImageToDataUrl(file, 512, 0.85);
-  const blob = await (await fetch(dataUrl)).blob();
+  // data URL -> Blob sans fetch() (la politique de sécurité bloque fetch sur data:)
+  const bin = atob(dataUrl.split(",")[1]); const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const blob = new Blob([bytes], { type: "image/jpeg" });
   const path = key + "-" + Date.now() + ".jpg";
   const up = await sb.storage.from("menu-images").upload(path, blob, { contentType: "image/jpeg" });
   if (up.error) throw up.error;
   return sb.storage.from("menu-images").getPublicUrl(path).data.publicUrl;
+}
+/** Bouton image (téléverse dans Supabase Storage, met l'adresse dans obj.icon). */
+function imagePicker(obj, keyBase, small) {
+  const file = h("input", { type: "file", accept: "image/*", style: "display:none", onChange: async (e) => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    try { toast("Téléversement de l'image…"); obj.icon = await uploadMenuImage(f, keyBase); toast("Image ajoutée ✅ (pense à enregistrer le menu)", "good"); render(); }
+    catch (er) { console.warn(er); toast("Impossible de téléverser l'image : " + ((er && er.message) || "erreur"), "bad"); }
+  } });
+  const btn = h("button", { class: "prodPic" + (small ? " sm" : ""), type: "button", title: "Changer l'image", onClick: () => file.click() },
+    obj.icon ? [iconImg(obj.icon, { alt: "", class: "" }), h("small", {}, "Changer")] : [h("span", { style: "font-size:1.4rem" }, "📷"), h("small", {}, "Image")]);
+  return [file, btn];
 }
 function renderStaffMenu() {
   if (!StaffUI.menuDraft) StaffUI.menuDraft = JSON.parse(JSON.stringify(menu()));
@@ -365,18 +381,18 @@ function renderStaffMenu() {
 
   const drinkCards = m.drinks.map((d, i) => {
     if (!Array.isArray(d.extras)) d.extras = [];
-    const file = h("input", { type: "file", accept: "image/*", style: "display:none", onChange: async (e) => {
-      const f = e.target.files && e.target.files[0]; if (!f) return;
-      try { toast("Téléversement de l'image…"); d.icon = await uploadMenuImage(f, d.id || "produit"); toast("Image ajoutée ✅ (pense à enregistrer le menu)", "good"); render(); }
-      catch (er) { console.warn(er); toast("Impossible de téléverser l'image. Réessaie avec une autre photo.", "bad"); }
-    } });
-    const pic = h("button", { class: "prodPic", type: "button", title: "Changer l'image", onClick: () => file.click() },
-      d.icon ? [iconImg(d.icon, { alt: "", class: "" }), h("small", {}, "Changer")] : [h("span", { style: "font-size:1.6rem" }, "📷"), h("small", {}, "Ajouter une image")]);
-    const extraRows = d.extras.map((x, k) => h("div", { class: "extraRow" }, [
-      h("input", { value: x.name, placeholder: "Nom de l'ajout", maxlength: "40", onChange: (e) => { x.name = e.target.value.trim() || x.name; } }),
-      moneyInput(x.priceCents, (c) => { x.priceCents = c; }, "Prix de l'ajout"),
-      h("button", { class: "btn sm bad", type: "button", "aria-label": "Retirer cet ajout", onClick: () => { d.extras.splice(k, 1); render(); } }, "✕"),
-    ]));
+    const [file, pic] = imagePicker(d, d.id || "produit");
+    const extraRows = d.extras.map((x, k) => {
+      const [xfile, xpic] = imagePicker(x, (d.id || "produit") + "-" + (x.id || "ajout"), true);
+      return h("div", { class: "extraRow" }, [
+        xfile, xpic,
+        h("div", { class: "extraMain" }, [
+          h("input", { value: x.name, placeholder: "Nom de l'ajout", maxlength: "40", "aria-label": "Nom de l'ajout", onChange: (e) => { x.name = e.target.value.trim() || x.name; } }),
+          moneyInput(x.priceCents, (c) => { x.priceCents = c; }, "Prix de l'ajout"),
+        ]),
+        h("button", { class: "btn sm bad", type: "button", "aria-label": "Retirer cet ajout", onClick: () => { d.extras.splice(k, 1); render(); } }, "✕"),
+      ]);
+    });
     return h("div", { class: "prodCard" }, [
       h("div", { class: "prodTop" }, [file, pic, h("div", { class: "prodMain" }, [
         h("input", { value: d.name, maxlength: "40", "aria-label": "Nom du produit", onChange: (e) => { d.name = e.target.value.trim() || d.name; } }),
@@ -495,8 +511,9 @@ function renderStaffReport() {
       kpi("Commandes", String(r.orders)), kpi("Boissons servies", String(r.drinks)), kpi("Boissons gratuites", String(r.free_drinks)), kpi("Corrections manuelles", money(r.adjusts_cents)),
     ]));
     body.push(h("p", { class: "muted small" }, "Ventes = argent « dépensé » en boissons. Recharges = argent comptant remis au café. L'écart entre les deux est l'argent qui reste dans les portefeuilles."));
-    const rows = (r.days || []).map((d) => h("tr", {}, [h("td", {}, longDateFr(d.d).replace(/ \d{4}$/, "")), h("td", {}, String(d.orders)), h("td", {}, String(d.drinks)), h("td", {}, money(d.sales)), h("td", {}, money(d.topups))]));
-    body.push(h("div", { class: "tblWrap" }, h("table", { class: "tbl" }, [h("thead", {}, h("tr", {}, ["Jour", "Commandes", "Boissons", "Ventes", "Recharges"].map((t) => h("th", {}, t)))), h("tbody", {}, rows)])));
+    const rows = (r.days || []).map((d) => h("tr", {}, [h("td", {}, dmyFr(d.d)), h("td", {}, String(d.orders)), h("td", {}, String(d.drinks)), h("td", {}, money(d.sales)), h("td", {}, money(d.topups))]));
+    body.push(h("div", { class: "tblWrap" }, h("table", { class: "tbl" }, [h("thead", {}, h("tr", {}, [["Jour", "Jour"], ["Cmd.", "Commandes"], ["Bois.", "Boissons"], ["Ventes", "Ventes"], ["Rech.", "Recharges"]].map(([t, f]) => h("th", { title: f }, t)))), h("tbody", {}, rows)])));
+    body.push(h("p", { class: "muted small", style: "margin:6px 0 0" }, "Cmd. = commandes · Bois. = boissons · Rech. = recharges"));
     if ((r.top || []).length) body.push(h("div", { style: "margin-top:14px" }, [h("h3", {}, "Boissons les plus populaires"), h("p", {}, r.top.map((t) => `${t.name} (${t.n})`).join(" · "))]));
     body.push(h("div", { class: "actions" }, [
       h("button", { class: "btn", type: "button", onClick: () => exportReportCsv(r) }, "⬇ Résumé par jour (CSV)"),
@@ -577,5 +594,18 @@ function renderStaffSettings() {
       catch (e) { toast(errText(e, "Modification impossible."), "bad"); }
     } }, "Changer le mot de passe")),
   ]);
-  return staffShell("staff_settings", [content, passCard]);
+  const dPass = h("input", { type: "password", autocomplete: "new-password", placeholder: "Nouveau mot de passe livraison (8 caractères min.)" });
+  const dPass2 = h("input", { type: "password", autocomplete: "new-password", placeholder: "Répète le nouveau mot de passe" });
+  const deliveryPassCard = h("div", { class: "card" }, [
+    h("h2", {}, "Mot de passe livraison"),
+    h("p", { class: "muted small" }, "Le groupe livraison entre dans son espace avec ce mot de passe (adresse « #livraison » de l'app). En le changeant, les appareils du groupe livraison sont déconnectés : donne-leur le nouveau mot de passe."),
+    dPass, h("div", { style: "height:8px" }), dPass2,
+    h("div", { style: "margin-top:10px" }, h("button", { class: "btn sm good", type: "button", onClick: async () => {
+      if (dPass.value.length < 8) return toast("8 caractères minimum.", "bad");
+      if (dPass.value !== dPass2.value) return toast("Les deux mots de passe ne sont pas identiques.", "bad");
+      try { await staffSetDeliveryPassword(dPass.value); dPass.value = ""; dPass2.value = ""; toast("Mot de passe livraison modifié ✅", "good"); }
+      catch (e) { toast(errText(e), "bad"); }
+    } }, "Changer le mot de passe livraison")),
+  ]);
+  return staffShell("staff_settings", [content, passCard, deliveryPassCard]);
 }

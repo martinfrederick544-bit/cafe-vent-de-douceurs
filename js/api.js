@@ -10,6 +10,7 @@ const sb = (window.__VD_MOCK__ || supabase).createClient(VD.SUPABASE_URL, VD.SUP
 
 const State = {
   session: null,
+  delivery: [],
   profile: null,        // {id,email,name,location,photo,is_staff,balance_cents}
   settings: null,       // ligne vd_settings
   myOrders: [],
@@ -31,7 +32,7 @@ function unwrap(res) { if (res.error) throw res.error; return res.data; }
 async function loadProfile() {
   if (!State.session) { State.profile = null; return null; }
   const data = unwrap(await sb.from("vd_profiles")
-    .select("id,email,name,location,photo,is_staff,balance_cents")
+    .select("id,email,name,location,photo,is_staff,is_delivery,balance_cents")
     .eq("id", State.session.user.id).maybeSingle());
   State.profile = data || null;
   if (data && data.photo) State.photoCache[data.id] = data.photo;
@@ -84,7 +85,7 @@ async function loadStaffOrders() {
 async function loadCups() { State.cups = unwrap(await sb.from("vd_cups").select("*").order("number")) || []; }
 async function loadUsers() {
   State.users = unwrap(await sb.from("vd_profiles")
-    .select("id,email,name,location,balance_cents,has_photo,is_staff").eq("is_staff", false).order("name").limit(1000)) || [];
+    .select("id,email,name,location,balance_cents,has_photo,is_staff").eq("is_staff", false).eq("is_delivery", false).order("name").limit(1000)) || [];
 }
 async function ensurePhotos(ids) {
   const need = [...new Set(ids.filter((id) => id && !(id in State.photoCache)))];
@@ -101,6 +102,9 @@ async function ensurePhotos(ids) {
 async function staffSetStatus(orderId, status) { unwrap(await sb.rpc("vd_staff_set_status", { p_order_id: orderId, p_status: status })); }
 async function staffAssignCup(orderId, cup) { return unwrap(await sb.rpc("vd_staff_assign_cup", { p_order_id: orderId, p_cup: cup === undefined ? null : cup })); }
 async function staffAssignCups(orderId, count) { return unwrap(await sb.rpc("vd_staff_assign_cups", { p_order_id: orderId, p_count: count })); }
+async function loadDelivery() { State.delivery = unwrap(await sb.rpc("vd_delivery_list")) || []; }
+async function deliveryMark(orderId, delivered) { unwrap(await sb.rpc("vd_delivery_mark", { p_order_id: orderId, p_delivered: delivered !== false })); }
+async function staffSetDeliveryPassword(pw) { unwrap(await sb.rpc("vd_staff_set_delivery_password", { p_password: pw })); }
 async function staffReturnCup(cup) { unwrap(await sb.rpc("vd_staff_return_cup", { p_cup: cup })); }
 async function staffSetCupCount(n) { unwrap(await sb.rpc("vd_staff_set_cup_count", { p_count: n })); }
 async function staffTopup(userId, cents, note) { return unwrap(await sb.rpc("vd_staff_topup", { p_user: userId, p_amount_cents: cents, p_note: note || null })); }
@@ -161,6 +165,7 @@ async function enablePush(role) {
 async function refreshPushSubscription() {
   try {
     if (!pushSupported() || !("PushManager" in window) || Notification.permission !== "granted" || !State.profile) return;
+    if (State.profile.is_delivery) { await enablePush("delivery"); return; }
     await enablePush("client");
     if (State.profile.is_staff) await enablePush("staff");
   } catch (_e) { /* non bloquant */ }

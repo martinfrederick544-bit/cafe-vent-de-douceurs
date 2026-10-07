@@ -69,7 +69,7 @@ function brandHeader(rightEls) {
       h("img", { src: "/logo.png", alt: "" }),
       h("div", { style: "min-width:0" }, [h("h1", {}, "Café Vent de douceurs"), h("p", {}, "express")]),
     ]),
-    h("div", { class: "topActions" }, [].concat(rightEls || [], [h("button", { class: "iconBtn helpBtn", type: "button", "aria-label": "Aide", title: "Aide", onClick: () => openHelp() }, "?")])),
+    h("div", { class: "topActions" }, [].concat(rightEls || [], (State.profile && State.profile.is_delivery ? [] : [h("button", { class: "iconBtn helpBtn", type: "button", "aria-label": "Aide", title: "Aide", onClick: () => openHelp() }, "?")]))),
   ]);
 }
 
@@ -227,7 +227,7 @@ function notifBanner(role) {
     if (localStorage.getItem("vd_notif_dismissed_" + role) === "1") return null;
   } catch (_e) { return null; }
   return h("div", { class: "banner" }, [
-    h("b", {}, role === "staff" ? "Reçois chaque nouvelle commande en notification. " : "Sois averti quand ta boisson est prête. "),
+    h("b", {}, role === "staff" ? "Reçois chaque nouvelle commande en notification. " : role === "delivery" ? "Reçois une notification quand un café est prêt à livrer. " : "Sois averti quand ta boisson est prête (ou livrée). "),
     h("div", { class: "row", style: "margin-top:8px" }, [
       h("button", { class: "btn sm primary", type: "button", onClick: async () => {
         try { await enablePush(role); if (State.profile.is_staff && role === "client") await enablePush("staff"); toast("Notifications activées ✅", "good"); render(); }
@@ -463,6 +463,7 @@ function openBuilder(drinkId, editIdx) {
     const extrasBlock = (d.extras || []).length ? h("div", {}, [
       h("h3", { style: "margin:16px 0 4px" }, "Ajouts"),
       (d.extras || []).map((e) => h("label", { class: "addonLine", style: "margin:0;color:var(--text);cursor:pointer" }, [
+        e.icon ? h("img", { src: iconUrl(e.icon), alt: "" }) : null,
         h("div", { class: "nm" }, e.name + (e.priceCents ? " (+" + money(e.priceCents) + ")" : "")),
         h("input", { type: "checkbox", checked: b.extras.includes(e.id), onChange: (ev) => {
           b.extras = b.extras.filter((x) => x !== e.id); if (ev.target.checked) b.extras.push(e.id); refresh(); } }),
@@ -519,7 +520,7 @@ function renderMyOrdersScreen() {
           h("b", {}, `${fmtDate(o.created_at_ms)} • ${fmtTime(o.created_at_ms)}`),
           h("div", { class: "muted small" }, `${o.mode === "pickup" ? "Ramassage" : "Livraison : " + o.location} · Total ${money(o.total_cents)}`),
         ]),
-        h("span", { class: "status " + o.status }, o.status),
+        h("span", { class: "status " + o.status }, o.status === "COMPLÉTÉE" && o.mode === "deliver" ? (o.delivered_at ? "LIVRÉE" : "EN LIVRAISON") : o.status),
       ]),
       cups.length ? h("div", { class: "cups" }, cups.map((n) => h("span", { class: "cupChip back", style: "text-decoration:none;opacity:1;border-color:var(--caramel);background:var(--info-bg)" }, "Tasse n° " + n))) : null,
       h("div", {}, orderItemRows(o, true)),

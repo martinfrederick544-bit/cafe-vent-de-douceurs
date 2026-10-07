@@ -83,6 +83,10 @@ create table if not exists public.vd_wallet_tx (
 );
 create index if not exists vd_wallet_tx_user_idx on public.vd_wallet_tx(user_id, created_at desc);
 
+-- Livraison : 2e groupe (compte partagé « livraison ») qui marque les commandes livrées
+alter table public.vd_profiles add column if not exists is_delivery boolean not null default false;
+alter table public.vd_orders   add column if not exists delivered_at timestamptz;
+
 -- Configuration interne (URL + secret du service de notifications) — jamais lisible côté navigateur
 create table if not exists public.vd_config (
   key   text primary key,
@@ -319,7 +323,7 @@ begin
         select e into v_ex from jsonb_array_elements(coalesce(v_drink->'extras', '[]'::jsonb)) e where e->>'id' = v_exid;
         if v_ex is null then raise exception 'BAD_EXTRA'; end if;
         v_exclean := v_exclean || jsonb_build_array(jsonb_build_object(
-          'id', v_ex->>'id', 'name', v_ex->>'name', 'price_cents', coalesce((v_ex->>'priceCents')::int, 0)));
+          'id', v_ex->>'id', 'name', v_ex->>'name', 'icon', v_ex->>'icon', 'price_cents', coalesce((v_ex->>'priceCents')::int, 0)));
         v_price := v_price + coalesce((v_ex->>'priceCents')::int, 0);
       end loop;
     end if;
@@ -412,7 +416,7 @@ begin
     update public.vd_cups set status = 'available', order_id = null, updated_at = now() where order_id = v_o.id;
   end if;
 
-  update public.vd_orders set status = p_status where id = p_order_id;
+  update public.vd_orders set status = p_status, delivered_at = null where id = p_order_id;
 end;
 $$;
 
@@ -585,7 +589,7 @@ begin
     'adjusts_cents', coalesce((select sum(adjusts) from days), 0),
     'refunds_cents', coalesce((select sum(refunds) from days), 0),
     'free_drinks',   coalesce((select count(*) from ord_r where free_item), 0),
-    'outstanding_cents', coalesce((select sum(balance_cents) from public.vd_profiles where not is_staff), 0),
+    'outstanding_cents', coalesce((select sum(balance_cents) from public.vd_profiles where not is_staff and not is_delivery), 0),
     'days', coalesce((select jsonb_agg(to_jsonb(days) order by days.d) from days), '[]'::jsonb),
     'top',  coalesce((select jsonb_agg(to_jsonb(top)) from top), '[]'::jsonb)
   ) into v_res;
@@ -607,8 +611,9 @@ declare
   v_name text;
 begin
   if auth.uid() is null then raise exception 'NOT_AUTHENTICATED'; end if;
-  if p_role not in ('staff','client') then raise exception 'BAD_ROLE'; end if;
+  if p_role not in ('staff','client','delivery') then raise exception 'BAD_ROLE'; end if;
   if p_role = 'staff' then perform public.vd_require_staff(); end if;
+  if p_role = 'delivery' and not (public.vd_is_delivery() or public.vd_is_staff()) then raise exception 'NOT_DELIVERY'; end if;
   select name into v_name from public.vd_profiles where id = auth.uid();
 
   insert into public.vd_push_subscriptions (endpoint, role, p256dh, auth, user_id, user_name)
@@ -709,7 +714,15 @@ create or replace function public.vd_trg_order_update()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
   if new.status is distinct from old.status and new.user_id is not null then
-    if new.status = 'COMPLÉTÉE' then
+    if new.status = 'COMPLÉTÉE' and new.mode = 'deliver' then
+      -- livraison : le groupe livraison est prévenu ; le client le sera quand ce sera « livré »
+      perform public.vd_push_dispatch(jsonb_build_object(
+        'title', 'Café à livrer 🛒',
+        'body',  new.location || ' — ' || new.user_name || case when coalesce(array_length(new.cup_numbers, 1), 0) > 0
+                      then ' (tasse n° ' || array_to_string(new.cup_numbers, ', ') || ')' else '' end,
+        'url', '/#livraison', 'tag', 'deliver_' || new.id,
+        'subs', public.vd_push_subs('delivery')));
+    elsif new.status = 'COMPLÉTÉE' then
       perform public.vd_push_dispatch(jsonb_build_object(
         'title', 'Commande prête ✅',
         'body',  case when coalesce(array_length(new.cup_numbers, 1), 0) > 0
@@ -753,6 +766,23 @@ create trigger vd_order_insert_push after insert on public.vd_orders
 drop trigger if exists vd_order_update_push on public.vd_orders;
 create trigger vd_order_update_push after update of status on public.vd_orders
   for each row execute function public.vd_trg_order_update();
+create or replace function public.vd_trg_order_delivered()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if old.delivered_at is null and new.delivered_at is not null and new.user_id is not null and new.status = 'COMPLÉTÉE' then
+    perform public.vd_push_dispatch(jsonb_build_object(
+      'title', 'Commande livrée ✅',
+      'body',  'Ta boisson vient d''être livrée. Bon café !',
+      'url', '/#orders', 'tag', 'delivered_' || new.id,
+      'subs', public.vd_push_subs('client', new.user_id)));
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists vd_order_delivered_push on public.vd_orders;
+create trigger vd_order_delivered_push after update of delivered_at on public.vd_orders
+  for each row execute function public.vd_trg_order_delivered();
+
 drop trigger if exists vd_balance_push on public.vd_profiles;
 create trigger vd_balance_push after update of balance_cents on public.vd_profiles
   for each row execute function public.vd_trg_balance();
@@ -861,3 +891,64 @@ create policy vd_menu_img_delete on storage.objects for delete to authenticated
 drop policy if exists vd_menu_img_select on storage.objects;
 create policy vd_menu_img_select on storage.objects for select to authenticated
   using (bucket_id = 'menu-images' and public.vd_is_staff());
+
+-- ---------------------------------------------------------------------
+-- 10) LIVRAISON : compte partagé « livraison » (is_delivery) — voit seulement les commandes « à livrer »
+-- ---------------------------------------------------------------------
+alter table public.vd_push_subscriptions drop constraint if exists vd_push_subscriptions_role_check;
+alter table public.vd_push_subscriptions add constraint vd_push_subscriptions_role_check check (role in ('staff','client','delivery'));
+
+create or replace function public.vd_is_delivery()
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((select is_delivery from public.vd_profiles where id = auth.uid()), false);
+$$;
+
+-- Commandes à livrer (mode livraison, complétées, pas encore livrées) + livrées depuis 2 h (pour annuler une erreur)
+create or replace function public.vd_delivery_list()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  if not (public.vd_is_delivery() or public.vd_is_staff()) then raise exception 'NOT_DELIVERY'; end if;
+  return coalesce((
+    select jsonb_agg(to_jsonb(x) order by (x.delivered_at is not null), x.created_at_ms) from (
+      select o.id, o.user_name, o.location, o.cup_numbers, o.items, o.comment, o.created_at_ms, o.delivered_at, p.photo
+        from public.vd_orders o left join public.vd_profiles p on p.id = o.user_id
+       where o.mode = 'deliver' and o.status = 'COMPLÉTÉE'
+         and ((o.delivered_at is null and o.created_at_ms > (extract(epoch from now()) * 1000)::bigint - 86400000)
+              or o.delivered_at > now() - interval '2 hours')
+    ) x), '[]'::jsonb);
+end;
+$$;
+
+create or replace function public.vd_delivery_mark(p_order_id text, p_delivered boolean default true)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_o public.vd_orders%rowtype;
+begin
+  if not (public.vd_is_delivery() or public.vd_is_staff()) then raise exception 'NOT_DELIVERY'; end if;
+  select * into v_o from public.vd_orders where id = p_order_id for update;
+  if not found then raise exception 'ORDER_NOT_FOUND'; end if;
+  if v_o.mode <> 'deliver' or v_o.status <> 'COMPLÉTÉE' then raise exception 'BAD_STATUS'; end if;
+  update public.vd_orders set delivered_at = case when p_delivered then coalesce(delivered_at, now()) else null end where id = p_order_id;
+end;
+$$;
+
+-- Le staff change seul le mot de passe du compte livraison (déconnecte les appareils livraison déjà connectés)
+create or replace function public.vd_staff_set_delivery_password(p_password text)
+returns void language plpgsql security definer set search_path = public, extensions as $$
+declare
+  v_id uuid;
+begin
+  perform public.vd_require_staff();
+  if p_password is null or length(p_password) < 8 or length(p_password) > 72 then raise exception 'WEAK_PASSWORD'; end if;
+  select id into v_id from public.vd_profiles where is_delivery limit 1;
+  if v_id is null then raise exception 'NO_DELIVERY_ACCOUNT'; end if;
+  update auth.users set encrypted_password = crypt(p_password, gen_salt('bf')), updated_at = now() where id = v_id;
+  delete from auth.sessions where user_id = v_id;
+end;
+$$;
+
+revoke execute on function public.vd_trg_order_delivered() from public, anon, authenticated;
+revoke execute on function public.vd_is_delivery(), public.vd_delivery_list(), public.vd_delivery_mark(text, boolean),
+  public.vd_staff_set_delivery_password(text) from public, anon, authenticated;
+grant execute on function public.vd_is_delivery(), public.vd_delivery_list(), public.vd_delivery_mark(text, boolean),
+  public.vd_staff_set_delivery_password(text) to authenticated;

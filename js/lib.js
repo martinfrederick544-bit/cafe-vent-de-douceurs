@@ -40,6 +40,8 @@ function longDateFr(key) {
   const [y, m, d] = String(key).split("-").map(Number);
   return JOURS_FR[new Date(y, m - 1, d).getDay()] + " " + d + (d === 1 ? "er " : " ") + MOIS_FR[m - 1] + " " + y;
 }
+/** "2026-10-07" -> "07/10/2026" */
+function dmyFr(key) { return String(key).split("-").reverse().join("/"); }
 /** "2026-10" -> "octobre 2026" */
 function monthLabelFr(ym) { const [y, m] = String(ym).split("-").map(Number); return MOIS_FR[m - 1] + " " + y; }
 function dateKey(ms) { const d = new Date(ms); return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }

@@ -64,6 +64,9 @@ const FAQ = [
   { r: "staff", q: "Je me suis trompé dans une recharge", a: "Onglet **Clients** > **＋ Recharger** > choisis **− Retirer (correction)**, entre le montant à retirer et confirme. Tout reste visible dans l'**Historique** du client." },
   { r: "staff", q: "Que veut dire « solde bas » ? Et la limite de crédit ?", a: "Un client reçoit l'alerte **« Solde bas »** quand son solde passe sous **{seuil}**. Il peut commander à crédit jusqu'à **{decouvert}** de solde négatif. Filtre **Solde bas** dans **Clients** pour voir qui doit recharger. Les deux montants se règlent dans **Réglages**." },
   { r: "staff", q: "Comment ajouter la photo d'un client ?", a: "Onglet **Clients** > **Profil / photo** > **📷 Ajouter une photo**, puis choisis la photo (appareil photo, galerie ou dossier comme OneDrive). Elle est recadrée en carré automatiquement. Le filtre **Sans photo** liste ceux qui n'en ont pas." },
+  { r: "client", q: "Quand suis-je notifié ?", a: "**Ramassage** : dès que le café marque ta commande « prête ». **Livraison** : quand la livraison est marquée **livrée**. Tu es aussi averti si ta commande est annulée ou si ton solde est bas." },
+  { r: "staff", q: "Comment fonctionne la livraison (2e groupe) ?", a: "Quand tu touches **✔ Complétée** sur une commande en **livraison**, le groupe livraison reçoit « Café à livrer » et la voit dans son espace (**#livraison**, mot de passe à part). Il touche **✔ Livré** une fois la boisson remise : le client est alors notifié. Pour un **ramassage**, le client est notifié dès « Complétée » et le groupe livraison ne voit rien. Sur la carte, tu vois « En attente de livraison » ou « Livrée à 10:42 »." },
+  { r: "staff", q: "Comment changer le mot de passe du groupe livraison ?", a: "Onglet **Réglages** → carte **Mot de passe livraison** : entre le nouveau mot de passe deux fois puis touche le bouton. Les appareils du groupe livraison sont déconnectés et doivent se reconnecter avec le nouveau mot de passe." },
   { r: "staff", q: "Comment ajouter un nouveau produit ?", a: "Onglet **Menu** → **＋ Nouveau produit**. Écris le nom, touche l'image pour ajouter une photo, entre le prix (le signe $ est devant). Pour proposer des **ajouts au choix du client** (ex. beurre +0,50 $), touche **＋ Ajouter un ajout** et entre son nom et son prix. Coche **Produit simple** si le produit n'a ni sirop ni lait/sucre (ex. un muffin). Termine par **💾 Enregistrer le menu**." },
   { r: "staff", q: "Une commande a plusieurs boissons : comment attribuer les tasses ?", a: "Il faut **une tasse par boisson**. Sous la commande tu vois « Tasses : 2 / 5 boissons ». Touche **＋ Tasse auto** pour en ajouter une, ou **＋ Toutes les tasses** pour attribuer d'un coup toutes celles qui manquent. **Choisir…** permet de prendre un numéro précis." },
   { r: "staff", q: "Comment voir un ajout en plus gros ?", a: "Dans une commande, **touche la pastille de l'ajout** (sirop, lait, sucre, guimauves, ajout du menu…) : le pictogramme et le nom s'affichent en grand." },
@@ -224,7 +227,7 @@ function refreshHelpChat() { const b = $("#helpBody"); if (b && Help.tab === "ch
 let _introFor = null; // identifiant du compte pour lequel la visite a déjà été vérifiée (change si on se reconnecte avec un autre compte)
 function introKey() { return "vd_intro_" + (State.profile ? State.profile.id : "anon"); }
 function maybeShowIntro() {
-  if (!State.profile || _introFor === State.profile.id || isSheetOpen()) return;
+  if (!State.profile || State.profile.is_delivery || _introFor === State.profile.id || isSheetOpen()) return;
   _introFor = State.profile.id;
   let seen = false; try { seen = !!localStorage.getItem(introKey()); } catch (_e) {}
   if (!seen) { Help.introIdx = 0; renderIntro(); }
