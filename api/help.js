@@ -4,7 +4,7 @@
 //       SUPABASE_URL, SUPABASE_ANON_KEY.
 
 const DEFAULT_MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash"];
-const TIMEOUT_MS = 8000; // par tentative
+const TIMEOUT_MS = 10000; // par tentative
 
 const BASE = `Tu es l'assistant d'aide du « Café Vent de douceurs express », l'application de commande de café de l'École Régionale du Vent-Nouveau. Un café géré par des élèves : les adultes de l'école commandent, le café prépare et livre.
 Réponds toujours en français québécois simple et chaleureux, en TUTOYANT toujours l'utilisateur (jamais « vous »), en phrases courtes, avec des étapes numérotées quand c'est utile. Les utilisateurs ne sont pas des techniciens : pas de jargon.
@@ -119,7 +119,7 @@ async function discoverModels(key) {
 }
 
 async function askGemini(key, system, msgs) {
-  const configured = (process.env.GEMINI_MODELS ? process.env.GEMINI_MODELS.split(",").map((s) => s.trim()).filter(Boolean) : DEFAULT_MODELS);
+  const configured = (process.env.GEMINI_MODELS ? process.env.GEMINI_MODELS.split(",").map((x) => x.trim()).filter(Boolean) : DEFAULT_MODELS);
   const tried = new Set();
   const attempt = async (model) => {
     tried.add(model);
@@ -138,8 +138,31 @@ async function askGemini(key, system, msgs) {
       return ((out.candidates?.[0]?.content?.parts || [])).filter((p) => !p.thought).map((p) => p.text || "").join("").trim();
     } catch (e) { console.error("gemini", model, String(e)); return ""; }
   };
-  for (const m of configured) { const t = await attempt(m); if (t) return t; }
-  for (const m of await discoverModels(key)) { if (tried.has(m)) continue; const t = await attempt(m); if (t) return t; }
+
+  // Requêtes « couvertes » : le 1er modèle part tout de suite ; si il est lent, le suivant part 2,5 s plus tard (puis un 3e à 5 s).
+  // La première réponse valable gagne → les lenteurs ponctuelles de Google ne se voient presque plus.
+  const t0 = Date.now();
+  const hedged = await new Promise((resolve) => {
+    let idx = 0, pending = 0, done = false;
+    const finish = (t) => { if (!done) { done = true; resolve(t); } };
+    const launch = () => {
+      if (done || idx >= configured.length) return;
+      const m = configured[idx++]; pending++;
+      attempt(m).then((t) => {
+        pending--;
+        if (t) return finish(t);
+        if (idx < configured.length) launch(); else if (pending === 0) finish("");
+      });
+    };
+    launch();
+    setTimeout(launch, 2500); setTimeout(launch, 5000);
+    setTimeout(() => finish(""), 14000);
+  });
+  if (hedged) return hedged;
+
+  // Dernier recours : les modèles configurés ont peut-être été retirés → on découvre ceux qui existent.
+  if (Date.now() - t0 > 9000) return ""; // déjà trop long : on rend la main
+  for (const m of (await discoverModels(key)).slice(0, 1)) { if (tried.has(m)) continue; const t = await attempt(m); if (t) return t; }
   return "";
 }
 
