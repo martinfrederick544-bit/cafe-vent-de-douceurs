@@ -100,6 +100,7 @@ async function ensurePhotos(ids) {
 }
 async function staffSetStatus(orderId, status) { unwrap(await sb.rpc("vd_staff_set_status", { p_order_id: orderId, p_status: status })); }
 async function staffAssignCup(orderId, cup) { return unwrap(await sb.rpc("vd_staff_assign_cup", { p_order_id: orderId, p_cup: cup === undefined ? null : cup })); }
+async function staffAssignCups(orderId, count) { return unwrap(await sb.rpc("vd_staff_assign_cups", { p_order_id: orderId, p_count: count })); }
 async function staffReturnCup(cup) { unwrap(await sb.rpc("vd_staff_return_cup", { p_cup: cup })); }
 async function staffSetCupCount(n) { unwrap(await sb.rpc("vd_staff_set_cup_count", { p_count: n })); }
 async function staffTopup(userId, cents, note) { return unwrap(await sb.rpc("vd_staff_topup", { p_user: userId, p_amount_cents: cents, p_note: note || null })); }

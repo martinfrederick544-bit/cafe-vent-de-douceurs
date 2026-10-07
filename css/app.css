@@ -334,3 +334,24 @@ table.tbl th { color: var(--muted); font-size: .78rem; font-weight: 700; border-
 .dotsP { display: flex; gap: 6px; justify-content: center; margin: 14px 0 4px; }
 .dotP { width: 9px; height: 9px; border-radius: 50%; background: var(--stroke2); }
 .dotP.on { background: var(--caramel); }
+
+/* ---- produits du menu (staff) ---- */
+.moneyInput { display: inline-flex; align-items: center; border: 1.5px solid var(--stroke); border-radius: 12px; background: #fff; padding-left: 12px; min-height: 44px; max-width: 140px; }
+.moneyInput span { font-weight: 800; color: var(--muted); }
+.moneyInput input { border: none; background: transparent; min-height: 0; padding: 8px 10px 8px 6px; width: 84px; box-shadow: none; }
+.moneyInput:focus-within { border-color: var(--caramel); }
+.prodCard { border: 1px solid var(--stroke); border-radius: 16px; padding: 12px; margin-top: 12px; background: var(--bg2); }
+.prodTop { display: flex; gap: 12px; align-items: flex-start; }
+.prodMain { flex: 1; min-width: 0; }
+.prodPic { width: 84px; height: 84px; flex: none; border: 1.5px dashed var(--stroke); border-radius: 14px; background: #fff; padding: 0; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; cursor: pointer; position: relative; }
+.prodPic img, .prodPic .crop { width: 84px; height: 84px; object-fit: cover; }
+.prodPic small { font-size: .65rem; color: var(--muted); line-height: 1.1; text-align: center; padding: 0 4px; }
+.prodPic img + small, .prodPic .crop + small { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,.85); }
+.prodExtras { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--stroke); }
+.extraRow { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+.extraRow input:not([type]), .extraRow > input { flex: 1; min-width: 0; }
+.perRow { display: grid; grid-template-columns: 34px minmax(0, 1fr) 16px minmax(0, 1fr); gap: 6px; align-items: center; margin: 8px 0; }
+.perRow input { min-width: 0; width: 100%; }
+button.addon { font-family: inherit; cursor: pointer; color: inherit; }
+button.addon:active { transform: scale(.97); }
+.tbl th { white-space: nowrap; }

@@ -33,6 +33,15 @@ function money(cents) {
 function pad2(n) { return String(n).padStart(2, "0"); }
 function fmtTime(ms) { const d = new Date(ms); return pad2(d.getHours()) + ":" + pad2(d.getMinutes()); }
 function fmtDate(ms) { return new Date(ms).toLocaleDateString("fr-CA"); }
+const MOIS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+const JOURS_FR = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+/** "2026-10-07" -> "mercredi 7 octobre 2026" */
+function longDateFr(key) {
+  const [y, m, d] = String(key).split("-").map(Number);
+  return JOURS_FR[new Date(y, m - 1, d).getDay()] + " " + d + (d === 1 ? "er " : " ") + MOIS_FR[m - 1] + " " + y;
+}
+/** "2026-10" -> "octobre 2026" */
+function monthLabelFr(ym) { const [y, m] = String(ym).split("-").map(Number); return MOIS_FR[m - 1] + " " + y; }
 function dateKey(ms) { const d = new Date(ms); return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
 function todayKey() { return dateKey(Date.now()); }
 function dayRangeMs(key) {
@@ -51,6 +60,7 @@ function newOrderId() { return "ord_" + Date.now() + "_" + Math.random().toStrin
 
 function iconUrl(file) {
   if (!file) return "";
+  if (file.indexOf("https://") === 0) return file;   // image téléversée par le staff (Supabase Storage)
   return VD.ICON_OVERRIDES[file] || (VD.ICON_BASE + file);
 }
 

@@ -73,7 +73,7 @@ function renderStaffOrders() {
 
   return staffShell("staff", [
     h("div", { class: "card" }, h("div", { class: "row between" }, [
-      h("div", { class: "row" }, [h("b", {}, "Date"), dateInput, exportBtn]),
+      h("div", { class: "row" }, [h("b", {}, "Date"), dateInput, h("span", { class: "muted small" }, longDateFr(State.staffDate)), exportBtn]),
       h("div", { class: "row" }, [h("span", { class: "pill" }, ["Ventes du jour : ", h("b", {}, money(sales))]), h("span", { class: "pill" }, ["Tasses libres : ", h("b", {}, `${State.cups.filter((c) => c.status === "available").length}/${State.cups.length}`)])]),
     ])),
     notifBanner("staff"),
@@ -107,12 +107,16 @@ function staffOrderCard(o) {
   });
 
   const actions = h("div", { class: "actions" });
+  const nDrinks = (o.items || []).length;
+  const missing = Math.max(0, nDrinks - cups.length);
   if (o.status === "NOUVELLE") {
     actions.appendChild(mk("", "＋ Tasse auto", (b) => run(b, async () => { const n = await staffAssignCup(o.id); toast(`Tasse n° ${n} attribuée`, "good"); })));
+    if (missing > 1) actions.appendChild(mk("", `＋ Toutes les tasses (${missing})`, (b) => run(b, async () => { const ns = await staffAssignCups(o.id, missing); toast(`Tasses ${ns.join(", ")} attribuées`, "good"); })));
     const avail = State.cups.filter((c) => c.status === "available");
     if (avail.length) {
       const sel = h("select", { style: "width:auto;min-height:36px;padding:6px 10px" }, [h("option", { value: "" }, "Choisir…")].concat(avail.map((c) => h("option", { value: String(c.number) }, "n° " + c.number))));
       sel.addEventListener("change", () => { if (sel.value) run(null, async () => { await staffAssignCup(o.id, Number(sel.value)); }, "Tasse attribuée"); });
+      sel.title = "Choisir un numéro de tasse précis";
       actions.appendChild(sel);
     }
     actions.appendChild(mk("good", "✔ Complétée", (b) => run(b, () => staffSetStatus(o.id, "COMPLÉTÉE"), "Commande complétée")));
@@ -136,6 +140,7 @@ function staffOrderCard(o) {
     ]),
     h("div", {}, groupItems(o.items).map(({ it, count }) => staffItemRow(it, count))),
     o.comment ? h("div", { class: "banner", style: "margin:8px 0 0" }, "💬 " + o.comment) : null,
+    nDrinks > 1 || cups.length ? h("div", { class: "small", style: "margin-top:8px;font-weight:700;color:" + (o.status === "NOUVELLE" && missing ? "var(--warn)" : "var(--muted)") }, `Tasses : ${cups.length} / ${nDrinks} boisson${nDrinks > 1 ? "s" : ""}`) : null,
     cups.length ? h("div", { class: "cups" }, cupChips) : null,
     actions,
   ]);
@@ -147,14 +152,25 @@ function staffItemRow(it, count) {
   ADDONS.forEach((a) => { if (it[a.key]) addons.push({ icon: a.icon, label: "×" + it[a.key], title: a.label }); });
   if (it.marshmallows) addons.push({ icon: "guimauves.jpg", label: "", title: "Guimauves" });
   if (it.dairy_free) addons.push({ emoji: "🌱", label: "sans lait", title: "Sans produits laitiers" });
+  (it.extras || []).forEach((e) => addons.push({ emoji: "➕", label: e.name, title: e.name }));
   return h("div", { class: "itemLine" }, [
     it.icon ? iconImg(it.icon, { class: "big", alt: it.name, onClick: () => openImage(it.icon, it.name) }) : null,
     h("div", { class: "desc" }, [
       h("b", {}, (count > 1 ? count + " × " : "") + it.name + (it.free ? " 🎁" : "")),
-      h("div", { class: "addons" }, addons.map((a) => h("span", { class: "addon", title: a.title }, [
+      h("div", { class: "addons" }, addons.map((a) => h("button", { class: "addon", type: "button", title: a.title, onClick: () => openAddonBig(a) }, [
         a.icon ? h("img", { src: iconUrl(a.icon), alt: a.title }) : h("span", { style: "padding-left:6px" }, a.emoji), a.label || a.title]))),
     ]),
   ]);
+}
+
+/** Agrandit un ajout (pictogramme + nom + quantité) quand le staff touche la pastille. */
+function openAddonBig(a) {
+  openSheet(a.title, h("div", { style: "text-align:center" }, [
+    a.icon ? h("img", { src: iconUrl(a.icon), alt: a.title, style: "width:min(260px,70vw);height:min(260px,70vw);object-fit:contain;border-radius:18px" })
+           : h("div", { style: "font-size:7rem;line-height:1.3" }, a.emoji),
+    h("h2", { style: "margin:10px 0 0" }, a.title),
+    a.label && a.label !== a.title ? h("p", { style: "font-size:1.5rem;font-weight:800;margin:6px 0 0" }, a.label) : null,
+  ]));
 }
 
 function exportOrdersCsv() {
@@ -324,31 +340,74 @@ function renderStaffCups() {
 /* =========================================================
    MENU
 ========================================================= */
+/** Champ de prix avec le signe $ devant. */
+function moneyInput(cents, onChange, label) {
+  return h("div", { class: "moneyInput" }, [
+    h("span", { "aria-hidden": "true" }, "$"),
+    h("input", { type: "number", inputmode: "decimal", step: "0.05", min: "0", "aria-label": label || "Prix en dollars", value: ((cents || 0) / 100).toFixed(2),
+      onChange: (e) => onChange(Math.max(0, Math.round((parseFloat(e.target.value) || 0) * 100))) }),
+  ]);
+}
+async function uploadMenuImage(file, key) {
+  const dataUrl = await resizeImageToDataUrl(file, 512, 0.85);
+  const blob = await (await fetch(dataUrl)).blob();
+  const path = key + "-" + Date.now() + ".jpg";
+  const up = await sb.storage.from("menu-images").upload(path, blob, { contentType: "image/jpeg" });
+  if (up.error) throw up.error;
+  return sb.storage.from("menu-images").getPublicUrl(path).data.publicUrl;
+}
 function renderStaffMenu() {
   if (!StaffUI.menuDraft) StaffUI.menuDraft = JSON.parse(JSON.stringify(menu()));
   const m = StaffUI.menuDraft;
+  if (!Array.isArray(m.drinks)) m.drinks = [];
   const slug = (s) => normKey(s).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "item";
+  const uid = (base, list) => { let id = slug(base), n = 2; const root = id; while (list.some((x) => x.id === id)) id = root + "-" + n++; return id; };
 
-  const drinkRows = (m.drinks || []).map((d, i) => h("div", { class: "editRow" }, [
-    h("input", { value: d.name, onChange: (e) => { d.name = e.target.value.trim() || d.name; } }),
-    h("input", { type: "number", step: "0.25", min: "0", value: String((d.priceCents || 0) / 100), onChange: (e) => { d.priceCents = Math.round((parseFloat(e.target.value) || 0) * 100); } }),
-    h("label", { class: "row", style: "margin:0;color:var(--text);cursor:pointer" }, [h("input", { type: "checkbox", checked: d.available !== false, onChange: (e) => { d.available = e.target.checked; } }), "Offert"]),
-    h("button", { class: "btn sm bad", type: "button", onClick: () => { if (confirm("Supprimer cette boisson du menu ?")) { m.drinks.splice(i, 1); render(); } } }, "Supprimer"),
-  ]));
+  const drinkCards = m.drinks.map((d, i) => {
+    if (!Array.isArray(d.extras)) d.extras = [];
+    const file = h("input", { type: "file", accept: "image/*", style: "display:none", onChange: async (e) => {
+      const f = e.target.files && e.target.files[0]; if (!f) return;
+      try { toast("Téléversement de l'image…"); d.icon = await uploadMenuImage(f, d.id || "produit"); toast("Image ajoutée ✅ (pense à enregistrer le menu)", "good"); render(); }
+      catch (er) { console.warn(er); toast("Impossible de téléverser l'image. Réessaie avec une autre photo.", "bad"); }
+    } });
+    const pic = h("button", { class: "prodPic", type: "button", title: "Changer l'image", onClick: () => file.click() },
+      d.icon ? [iconImg(d.icon, { alt: "", class: "" }), h("small", {}, "Changer")] : [h("span", { style: "font-size:1.6rem" }, "📷"), h("small", {}, "Ajouter une image")]);
+    const extraRows = d.extras.map((x, k) => h("div", { class: "extraRow" }, [
+      h("input", { value: x.name, placeholder: "Nom de l'ajout", maxlength: "40", onChange: (e) => { x.name = e.target.value.trim() || x.name; } }),
+      moneyInput(x.priceCents, (c) => { x.priceCents = c; }, "Prix de l'ajout"),
+      h("button", { class: "btn sm bad", type: "button", "aria-label": "Retirer cet ajout", onClick: () => { d.extras.splice(k, 1); render(); } }, "✕"),
+    ]));
+    return h("div", { class: "prodCard" }, [
+      h("div", { class: "prodTop" }, [file, pic, h("div", { class: "prodMain" }, [
+        h("input", { value: d.name, maxlength: "40", "aria-label": "Nom du produit", onChange: (e) => { d.name = e.target.value.trim() || d.name; } }),
+        h("div", { class: "row", style: "gap:10px;margin-top:8px" }, [
+          moneyInput(d.priceCents, (c) => { d.priceCents = c; }, "Prix du produit"),
+          h("label", { class: "row", style: "margin:0;color:var(--text);cursor:pointer" }, [h("input", { type: "checkbox", checked: d.available !== false, onChange: (e) => { d.available = e.target.checked; } }), "Offert"]),
+        ]),
+      ])]),
+      h("div", { class: "prodExtras" }, [
+        h("b", { class: "small" }, "Ajouts au choix du client (optionnel)"),
+        extraRows,
+        h("button", { class: "btn sm", type: "button", onClick: () => { d.extras.push({ id: uid("ajout", d.extras), name: "Nouvel ajout", priceCents: 0 }); render(); } }, "＋ Ajouter un ajout"),
+      ]),
+      h("div", { class: "row between", style: "margin-top:10px" }, [
+        h("label", { class: "row", style: "margin:0;color:var(--text);cursor:pointer;flex:1;flex-wrap:nowrap" }, [
+          h("input", { type: "checkbox", checked: !!d.simple, onChange: (e) => { d.simple = e.target.checked; } }),
+          h("span", { class: "small" }, "Produit simple (sans sirop ni lait/sucre)")]),
+        h("button", { class: "btn sm bad", type: "button", onClick: async () => { if (await confirmDialog("Supprimer ce produit ?", d.name + " sera retiré du menu une fois le menu enregistré.", "Supprimer", "Retour", true)) { m.drinks.splice(i, 1); render(); } } }, "Supprimer"),
+      ]),
+    ]);
+  });
   const syrupRows = (m.syrups || []).map((s) => h("div", { class: "editRow", style: "grid-template-columns:1fr auto" }, [
     h("input", { value: s.name, onChange: (e) => { s.name = e.target.value.trim() || s.name; } }),
     h("label", { class: "row", style: "margin:0;color:var(--text);cursor:pointer" }, [h("input", { type: "checkbox", checked: s.available !== false, onChange: (e) => { s.available = e.target.checked; } }), "Offert"]),
   ]));
 
-  const newName = h("input", { placeholder: "Nom de la nouvelle boisson" });
-  const newPrice = h("input", { type: "number", step: "0.25", min: "0", value: "2", style: "max-width:110px" });
-  const addBtn = h("button", { class: "btn sm good", type: "button", onClick: () => {
-    const name = newName.value.trim(); if (!name) return toast("Entre un nom.", "bad");
-    let id = slug(name); while ((m.drinks || []).some((d) => d.id === id)) id += "-2";
-    m.drinks.push({ id, name, priceCents: Math.round((parseFloat(newPrice.value) || 0) * 100), icon: "", available: true });
-    render();
-  } }, "Ajouter");
-  const surcharge = h("input", { type: "number", step: "0.05", min: "0", value: String((m.syrupSurchargeCents || 0) / 100), style: "max-width:110px", onChange: (e) => { m.syrupSurchargeCents = Math.round((parseFloat(e.target.value) || 0) * 100); } });
+  const addBtn = h("button", { class: "btn good block", type: "button", onClick: () => {
+    m.drinks.push({ id: uid("produit", m.drinks), name: "Nouveau produit", priceCents: 200, icon: "", available: true, simple: true, extras: [] });
+    render(); setTimeout(() => { const cards = document.querySelectorAll(".prodCard"); const last = cards[cards.length - 1]; if (last) { last.scrollIntoView({ behavior: "smooth", block: "center" }); const inp = last.querySelector("input[aria-label='Nom du produit']"); if (inp) inp.select(); } }, 50);
+  } }, "＋ Nouveau produit");
+  const surcharge = moneyInput(m.syrupSurchargeCents || 0, (c) => { m.syrupSurchargeCents = c; }, "Supplément sirop");
 
   const save = h("button", { class: "btn primary block", type: "button", style: "margin-top:14px", onClick: async () => {
     try { await staffSaveSetting("menu", m); StaffUI.menuDraft = null; await loadSettings(); toast("Menu enregistré ✅", "good"); render(); }
@@ -356,11 +415,10 @@ function renderStaffMenu() {
   } }, "💾 Enregistrer le menu");
 
   return staffShell("staff_menu", [h("div", { class: "grid2 even" }, [
-    h("div", { class: "card" }, [h("h2", {}, "Boissons"), h("p", { class: "muted small" }, "Prix en dollars. Décoche « Offert » pour masquer une boisson sans la supprimer."), h("div", {}, drinkRows),
-      h("div", { class: "divider" }), h("div", { class: "row" }, [newName, newPrice, addBtn]),
-      h("p", { class: "muted small", style: "margin-top:6px" }, "Les pictogrammes des nouvelles boissons peuvent être ajoutés plus tard par le développeur.")]),
+    h("div", { class: "card" }, [h("h2", {}, "Produits"), h("p", { class: "muted small" }, "Touche l'image pour la changer. Décoche « Offert » pour masquer un produit sans le supprimer. N'oublie pas d'enregistrer le menu."),
+      h("div", {}, drinkCards), h("div", { style: "margin-top:12px" }, addBtn)]),
     h("div", { class: "card" }, [h("h2", {}, "Sirops"), h("div", {}, syrupRows),
-      h("div", { class: "divider" }), h("div", { class: "row" }, [h("b", {}, "Supplément avec sirop ($)"), surcharge]), save]),
+      h("div", { class: "divider" }), h("div", { class: "row" }, [h("b", {}, "Supplément avec sirop"), surcharge]), save]),
   ])]);
 }
 
@@ -383,10 +441,11 @@ function renderStaffHours() {
     } }, p.k))),
   ])));
 
-  const perRows = periods.map((p) => h("div", { class: "row", style: "margin:6px 0" }, [
-    h("b", { style: "width:34px" }, p.k),
-    h("input", { type: "time", value: p.start, style: "max-width:140px", onChange: (e) => { p.start = e.target.value; } }), "→",
-    h("input", { type: "time", value: p.end, style: "max-width:140px", onChange: (e) => { p.end = e.target.value; } }),
+  const perRows = periods.map((p) => h("div", { class: "perRow" }, [
+    h("b", {}, p.k),
+    h("input", { type: "time", value: p.start, "aria-label": "Début " + p.k, onChange: (e) => { p.start = e.target.value; } }),
+    h("span", { "aria-hidden": "true" }, "→"),
+    h("input", { type: "time", value: p.end, "aria-label": "Fin " + p.k, onChange: (e) => { p.end = e.target.value; } }),
   ]));
   const savePer = h("button", { class: "btn sm good", type: "button", onClick: async () => {
     try { await staffSaveSetting("periods", periods); await loadSettings(); toast("Périodes enregistrées ✅", "good"); render(); } catch (e) { toast(errText(e), "bad"); }
@@ -417,7 +476,14 @@ function renderStaffReport() {
   const r = StaffUI.report;
   // chargement automatique à l'ouverture de l'onglet (une seule tentative, « Actualiser » permet de réessayer)
   if (!r && !StaffUI.reportBusy && !StaffUI.reportTried) { StaffUI.reportTried = true; setTimeout(loadReport, 0); }
-  const monthInput = h("input", { type: "month", value: StaffUI.reportMonth, style: "max-width:200px", onChange: (e) => { StaffUI.reportMonth = e.target.value || StaffUI.reportMonth; StaffUI.report = null; loadReport(); } });
+  const [ry, rm] = StaffUI.reportMonth.split("-").map(Number);
+  const nowY = new Date().getFullYear();
+  const setMonth = (y, mo) => { StaffUI.reportMonth = y + "-" + pad2(mo); StaffUI.report = null; loadReport(); };
+  const monthSel = h("select", { style: "width:auto", "aria-label": "Mois", onChange: (e) => setMonth(ry, Number(e.target.value)) },
+    MOIS_FR.map((n, k) => h("option", { value: String(k + 1), selected: k + 1 === rm }, n.charAt(0).toUpperCase() + n.slice(1))));
+  const yearSel = h("select", { style: "width:auto", "aria-label": "Année", onChange: (e) => setMonth(Number(e.target.value), rm) },
+    [nowY + 1, nowY, nowY - 1, nowY - 2].map((y) => h("option", { value: String(y), selected: y === ry }, String(y))));
+  const monthInput = h("div", { class: "row", style: "gap:6px" }, [monthSel, yearSel]);
   const body = [];
   if (StaffUI.reportBusy) body.push(h("div", { class: "spinner" }));
   else if (!r) body.push(h("p", { class: "muted" }, "Choisis un mois pour voir le roulement d'argent."));
@@ -429,7 +495,7 @@ function renderStaffReport() {
       kpi("Commandes", String(r.orders)), kpi("Boissons servies", String(r.drinks)), kpi("Boissons gratuites", String(r.free_drinks)), kpi("Corrections manuelles", money(r.adjusts_cents)),
     ]));
     body.push(h("p", { class: "muted small" }, "Ventes = argent « dépensé » en boissons. Recharges = argent comptant remis au café. L'écart entre les deux est l'argent qui reste dans les portefeuilles."));
-    const rows = (r.days || []).map((d) => h("tr", {}, [h("td", {}, d.d), h("td", {}, String(d.orders)), h("td", {}, String(d.drinks)), h("td", {}, money(d.sales)), h("td", {}, money(d.topups))]));
+    const rows = (r.days || []).map((d) => h("tr", {}, [h("td", {}, longDateFr(d.d).replace(/ \d{4}$/, "")), h("td", {}, String(d.orders)), h("td", {}, String(d.drinks)), h("td", {}, money(d.sales)), h("td", {}, money(d.topups))]));
     body.push(h("div", { class: "tblWrap" }, h("table", { class: "tbl" }, [h("thead", {}, h("tr", {}, ["Jour", "Commandes", "Boissons", "Ventes", "Recharges"].map((t) => h("th", {}, t)))), h("tbody", {}, rows)])));
     if ((r.top || []).length) body.push(h("div", { style: "margin-top:14px" }, [h("h3", {}, "Boissons les plus populaires"), h("p", {}, r.top.map((t) => `${t.name} (${t.n})`).join(" · "))]));
     body.push(h("div", { class: "actions" }, [
@@ -438,7 +504,7 @@ function renderStaffReport() {
     ]));
   }
   return staffShell("staff_report", [h("div", { class: "card" }, [
-    h("div", { class: "row between" }, [h("h2", { style: "margin:0" }, "Rapport mensuel"), h("div", { class: "row" }, [monthInput, h("button", { class: "btn sm", type: "button", onClick: () => loadReport() }, "Actualiser")])]),
+    h("div", { class: "row between" }, [h("h2", { style: "margin:0" }, "Rapport — " + monthLabelFr(StaffUI.reportMonth)), h("div", { class: "row" }, [monthInput, h("button", { class: "btn sm", type: "button", onClick: () => loadReport() }, "Actualiser")])]),
     h("div", { class: "divider" }), h("div", {}, body),
   ])]);
 }

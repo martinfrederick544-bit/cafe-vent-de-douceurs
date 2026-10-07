@@ -26,7 +26,8 @@ function syrupById(id) { return (menu().syrups || []).find((s) => s.id === id); 
 function itemPrice(it) {
   const d = drinkById(it.drink);
   if (!d) return 0;
-  return (d.priceCents || 0) + (it.syrup ? (menu().syrupSurchargeCents || 0) : 0);
+  const ex = (d.extras || []).filter((e) => (it.extras || []).includes(e.id)).reduce((s, e) => s + (e.priceCents || 0), 0);
+  return (d.priceCents || 0) + (it.syrup && !d.simple ? (menu().syrupSurchargeCents || 0) : 0) + ex;
 }
 function describeItem(it) {
   // it: item du panier OU item enregistré en commande (qui contient déjà les noms)
@@ -42,6 +43,11 @@ function describeItem(it) {
   if (it.sweetener) parts.push(`édulcorant ×${it.sweetener}`);
   if (it.marshmallows) parts.push("guimauves");
   if (it.dairy_free) parts.push("sans produits laitiers");
+  const d = drinkById(it.drink);
+  (it.extras || []).forEach((e) => {
+    const nm = typeof e === "object" ? e.name : ((d && (d.extras || []).find((x) => x.id === e)) || {}).name;
+    if (nm) parts.push(nm);
+  });
   return parts.join(" · ");
 }
 function cartTotals() {
@@ -377,6 +383,7 @@ async function submitOrder(btn, err) {
     const items = UI.cart.map((it) => ({
       drink: it.drink, syrup: it.syrup || null, milk: it.milk || 0, cream: it.cream || 0, sugar: it.sugar || 0,
       sweetener: it.sweetener || 0, marshmallows: !!it.marshmallows, dairy_free: !!it.dairy_free,
+      extras: (it.extras || []).filter((x) => typeof x === "string"),
     }));
     const r = await placeOrder(newOrderId(), items, UI.draft.location.trim(), UI.draft.comment.trim(), UI.draft.mode, UI.draft.useFree);
     UI.cart = []; saveCart();
@@ -398,8 +405,9 @@ function openBuilder(drinkId, editIdx) {
   if (!d) return;
   const editing = editIdx !== undefined && editIdx !== null;
   const b = editing ? JSON.parse(JSON.stringify(UI.cart[editIdx])) : {
-    drink: d.id, syrup: null, milk: 0, cream: 0, sugar: 0, sweetener: 0, marshmallows: false, dairy_free: false,
+    drink: d.id, syrup: null, milk: 0, cream: 0, sugar: 0, sweetener: 0, marshmallows: false, dairy_free: false, extras: [],
   };
+  if (!Array.isArray(b.extras)) b.extras = [];
   let ui = null;
   const syrups = (menu().syrups || []).filter((s) => s.available !== false);
 
@@ -452,12 +460,21 @@ function openBuilder(drinkId, editIdx) {
       toast(editing ? "Boisson modifiée" : "Ajouté au panier ✅", "good");
     } }, `${editing ? "Enregistrer" : "Ajouter au panier"} — ${money(priceNow())}`);
 
+    const extrasBlock = (d.extras || []).length ? h("div", {}, [
+      h("h3", { style: "margin:16px 0 4px" }, "Ajouts"),
+      (d.extras || []).map((e) => h("label", { class: "addonLine", style: "margin:0;color:var(--text);cursor:pointer" }, [
+        h("div", { class: "nm" }, e.name + (e.priceCents ? " (+" + money(e.priceCents) + ")" : "")),
+        h("input", { type: "checkbox", checked: b.extras.includes(e.id), onChange: (ev) => {
+          b.extras = b.extras.filter((x) => x !== e.id); if (ev.target.checked) b.extras.push(e.id); refresh(); } }),
+      ])),
+    ]) : null;
+
     return h("div", {}, [
       h("div", { class: "row", style: "gap:14px;flex-wrap:nowrap" }, [
         d.icon ? iconImg(d.icon, { alt: d.name, class: "hdrpic", style: "width:96px;height:96px;border-radius:14px" }) : null,
         h("div", {}, [h("h2", { style: "margin:0" }, d.name), h("p", { class: "muted", style: "margin:4px 0 0" }, `Base : ${money(d.priceCents)}`)]),
       ]),
-      syrupBlock, addons, addBtn,
+      d.simple ? null : syrupBlock, d.simple ? null : addons, extrasBlock, addBtn,
     ]);
   }
   function refresh() {
@@ -474,7 +491,7 @@ function openBuilder(drinkId, editIdx) {
 function groupItems(items) {
   const map = new Map();
   (items || []).forEach((it) => {
-    const key = JSON.stringify([it.drink, it.syrup, it.milk, it.cream, it.sugar, it.sweetener, it.marshmallows, it.dairy_free, !!it.free, it.price_cents]);
+    const key = JSON.stringify([it.drink, it.syrup, it.milk, it.cream, it.sugar, it.sweetener, it.marshmallows, it.dairy_free, (it.extras || []).map((e) => e.id || e), !!it.free, it.price_cents]);
     if (map.has(key)) map.get(key).count++; else map.set(key, { it, count: 1 });
   });
   return [...map.values()];
@@ -518,7 +535,8 @@ function reorder(o) {
     const d = drinkById(it.drink);
     if (!d || d.available === false) continue;
     const sy = it.syrup && syrupById(it.syrup.id) && syrupById(it.syrup.id).available !== false ? { id: it.syrup.id, level: it.syrup.level } : null;
-    items.push({ drink: it.drink, syrup: sy, milk: it.milk || 0, cream: it.cream || 0, sugar: it.sugar || 0, sweetener: it.sweetener || 0, marshmallows: !!it.marshmallows, dairy_free: !!it.dairy_free });
+    items.push({ drink: it.drink, syrup: sy, milk: it.milk || 0, cream: it.cream || 0, sugar: it.sugar || 0, sweetener: it.sweetener || 0, marshmallows: !!it.marshmallows, dairy_free: !!it.dairy_free,
+      extras: (it.extras || []).map((e) => e.id || e).filter((id) => (d.extras || []).some((x) => x.id === id)) });
   }
   if (!items.length) return toast("Ces boissons ne sont plus disponibles.", "bad");
   UI.cart = items; saveCart();

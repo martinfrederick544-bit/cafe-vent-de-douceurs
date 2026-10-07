@@ -277,6 +277,10 @@ declare
   v_idx      int := 0;
   v_loy      jsonb;
   v_new_bal  int;
+  v_simple   boolean;
+  v_exid     text;
+  v_ex       jsonb;
+  v_exclean  jsonb;
 begin
   if v_uid is null then raise exception 'NOT_AUTHENTICATED'; end if;
 
@@ -306,7 +310,20 @@ begin
     v_price := (v_drink->>'priceCents')::int;
     v_syrup := null;
     v_level := 0;
-    if jsonb_typeof(v_it->'syrup') = 'object' then
+    v_simple := coalesce((v_drink->>'simple')::boolean, false);   -- produit « simple » : ni sirop ni ajouts classiques
+    v_exclean := '[]'::jsonb;
+    if jsonb_typeof(v_it->'extras') = 'array' then
+      if jsonb_array_length(v_it->'extras') > 12 then raise exception 'BAD_EXTRA'; end if;
+      for v_exid in select distinct x from jsonb_array_elements_text(v_it->'extras') x loop
+        v_ex := null;
+        select e into v_ex from jsonb_array_elements(coalesce(v_drink->'extras', '[]'::jsonb)) e where e->>'id' = v_exid;
+        if v_ex is null then raise exception 'BAD_EXTRA'; end if;
+        v_exclean := v_exclean || jsonb_build_array(jsonb_build_object(
+          'id', v_ex->>'id', 'name', v_ex->>'name', 'price_cents', coalesce((v_ex->>'priceCents')::int, 0)));
+        v_price := v_price + coalesce((v_ex->>'priceCents')::int, 0);
+      end loop;
+    end if;
+    if not v_simple and jsonb_typeof(v_it->'syrup') = 'object' then
       select s into v_syrup
         from jsonb_array_elements(v_menu->'syrups') s
        where s->>'id' = v_it->'syrup'->>'id' and coalesce((s->>'available')::boolean, true);
@@ -324,13 +341,14 @@ begin
       'syrup',        case when v_syrup is null then null else jsonb_build_object(
                          'id', v_syrup->>'id', 'name', v_syrup->>'name',
                          'icon', v_syrup->>'icon', 'level', v_level) end,
-      'milk',         least(greatest(public.vd_json_int(v_it->'milk'), 0), 3),
-      'cream',        least(greatest(public.vd_json_int(v_it->'cream'), 0), 3),
-      'sugar',        least(greatest(public.vd_json_int(v_it->'sugar'), 0), 3),
-      'sweetener',    least(greatest(public.vd_json_int(v_it->'sweetener'), 0), 3),
-      'marshmallows', public.vd_json_bool(v_it->'marshmallows'),
-      'dairy_free',   public.vd_json_bool(v_it->'dairy_free')
-                      and coalesce((v_drink->>'dairyFreeOption')::boolean, false)
+      'milk',         case when v_simple then 0 else least(greatest(public.vd_json_int(v_it->'milk'), 0), 3) end,
+      'cream',        case when v_simple then 0 else least(greatest(public.vd_json_int(v_it->'cream'), 0), 3) end,
+      'sugar',        case when v_simple then 0 else least(greatest(public.vd_json_int(v_it->'sugar'), 0), 3) end,
+      'sweetener',    case when v_simple then 0 else least(greatest(public.vd_json_int(v_it->'sweetener'), 0), 3) end,
+      'marshmallows', public.vd_json_bool(v_it->'marshmallows') and not v_simple,
+      'dairy_free',   public.vd_json_bool(v_it->'dairy_free') and not v_simple
+                      and coalesce((v_drink->>'dairyFreeOption')::boolean, false),
+      'extras',       v_exclean
     ));
 
     if v_price > v_best_prc then v_best_prc := v_price; v_best_idx := v_idx; end if;
@@ -418,6 +436,25 @@ begin
   update public.vd_cups set status = 'in_use', order_id = p_order_id, updated_at = now() where number = v_cup;
   update public.vd_orders set cup_numbers = array_append(cup_numbers, v_cup) where id = p_order_id;
   return v_cup;
+end;
+$$;
+
+-- Attribue plusieurs tasses d'un coup (les plus petits numéros disponibles) ; retourne les numéros attribués
+create or replace function public.vd_staff_assign_cups(p_order_id text, p_count int)
+returns int[] language plpgsql security definer set search_path = public as $$
+declare
+  v_nums int[];
+begin
+  perform public.vd_require_staff();
+  if p_count is null or p_count < 1 or p_count > 20 then raise exception 'BAD_COUNT'; end if;
+  if not exists (select 1 from public.vd_orders where id = p_order_id) then raise exception 'ORDER_NOT_FOUND'; end if;
+  select array_agg(number order by number) into v_nums from (
+    select number from public.vd_cups where status = 'available' order by number limit p_count for update
+  ) c;
+  if coalesce(array_length(v_nums, 1), 0) < p_count then raise exception 'NO_CUP_AVAILABLE'; end if;
+  update public.vd_cups set status = 'in_use', order_id = p_order_id, updated_at = now() where number = any(v_nums);
+  update public.vd_orders set cup_numbers = cup_numbers || v_nums where id = p_order_id;
+  return v_nums;
 end;
 $$;
 
@@ -776,6 +813,7 @@ grant execute on function
   public.vd_update_my_profile(text, text), public.vd_set_my_photo(text),
   public.vd_place_order(text, jsonb, text, text, text, boolean),
   public.vd_staff_set_status(text, text), public.vd_staff_assign_cup(text, int),
+  public.vd_staff_assign_cups(text, int),
   public.vd_staff_return_cup(int), public.vd_staff_set_cup_count(int),
   public.vd_staff_topup(uuid, int, text), public.vd_staff_set_photo(uuid, text),
   public.vd_staff_update_user(uuid, text, text), public.vd_staff_save_setting(text, jsonb),
@@ -803,3 +841,23 @@ end $$;
 --    URL/secret des notifications push, puis création du compte staff universel
 --    (Authentication > Users > Add user, puis : update public.vd_profiles set is_staff = true where email = '...';)
 -- ---------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------
+-- 9) Images des produits ajoutés par le staff (bucket public en lecture, écriture réservée au staff)
+-- ---------------------------------------------------------------------
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('menu-images', 'menu-images', true, 500000, array['image/jpeg','image/png','image/webp'])
+on conflict (id) do update set public = true, file_size_limit = 500000, allowed_mime_types = array['image/jpeg','image/png','image/webp'];
+
+drop policy if exists vd_menu_img_insert on storage.objects;
+create policy vd_menu_img_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'menu-images' and public.vd_is_staff());
+drop policy if exists vd_menu_img_update on storage.objects;
+create policy vd_menu_img_update on storage.objects for update to authenticated
+  using (bucket_id = 'menu-images' and public.vd_is_staff());
+drop policy if exists vd_menu_img_delete on storage.objects;
+create policy vd_menu_img_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'menu-images' and public.vd_is_staff());
+drop policy if exists vd_menu_img_select on storage.objects;
+create policy vd_menu_img_select on storage.objects for select to authenticated
+  using (bucket_id = 'menu-images' and public.vd_is_staff());
