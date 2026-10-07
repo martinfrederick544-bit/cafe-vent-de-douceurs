@@ -55,6 +55,39 @@ const CLIENT_NOTE = `
 
 const json = (res, status, o) => res.status(status).json(o);
 
+// ---- réglages réels du café, injectés dans la consigne de l'assistant (prix, horaires, limites : toujours à jour) ----
+const money = (c) => (Number(c || 0) / 100).toFixed(2).replace(".", ",") + " $";
+const hm = (v) => { const x = /^(\d{1,2}):(\d{2})/.exec(String(v || "")); return x ? `${Number(x[1])} h ${x[2]}` : null; };
+
+async function loadSettings(token) {
+  try {
+    const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/vd_settings?id=eq.1&select=menu,periods,hours,low_balance_cents,credit_limit_cents,require_photo,cup_count`, {
+      headers: { apikey: process.env.SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(4000),
+    });
+    const j = await r.json();
+    return Array.isArray(j) ? j[0] : null;
+  } catch (_e) { return null; }
+}
+
+function liveInfo(s) {
+  if (!s) return "";
+  const m = s.menu || { drinks: [], syrups: [] };
+  const on = (m.drinks || []).filter((d) => d.available !== false), off = (m.drinks || []).filter((d) => d.available === false);
+  const days = { mon: "lundi", tue: "mardi", wed: "mercredi", thu: "jeudi", fri: "vendredi" };
+  const timed = (s.periods || []).filter((p) => hm(p.start) && hm(p.end));
+  let horaires;
+  if (!timed.length) horaires = "heures des périodes pas encore précisées : le café accepte les commandes en tout temps";
+  else horaires = Object.entries(days).map(([d, n]) => `${n} : ` + (timed.filter((p) => ((s.hours || {})[d] || []).includes(p.k)).map((p) => `${p.k} ${hm(p.start)} à ${hm(p.end)}`).join(", ") || "fermé")).join(" ; ");
+  return `
+
+=== RÉGLAGES ACTUELS DU CAFÉ (valeurs réelles : utilise-les pour répondre avec précision ; ils peuvent avoir changé depuis le lancement) ===
+- Boissons offertes et prix : ${on.map((d) => `${d.name} ${money(d.priceCents)}`).join(", ") || "aucune"}.${off.length ? " Boissons actuellement masquées : " + off.map((d) => d.name).join(", ") + "." : ""}
+- Sirops offerts : ${(m.syrups || []).filter((x) => x.available !== false).map((x) => x.name).join(", ") || "aucun"} ; supplément quand on ajoute un sirop : ${money(m.syrupSurchargeCents != null ? m.syrupSurchargeCents : 50)}.
+- Périodes d'ouverture (jour par jour) : ${horaires}.
+- Limite de solde négatif (découvert maximal) : ${money(s.credit_limit_cents)}. Alerte « solde bas » sous : ${money(s.low_balance_cents)}.
+- Photo de profil : ${s.require_photo ? "OBLIGATOIRE pour commander" : "facultative"}. Nombre de tasses numérotées : ${s.cup_count}.`;
+}
+
 async function checkUser(token) {
   const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/rpc/vd_help_check`, {
     method: "POST",
@@ -128,7 +161,8 @@ module.exports = async (req, res) => {
   const who = await checkUser(token);
   if (!who.ok) return json(res, who.status, { error: who.error });
 
-  const system = BASE + (who.staff ? STAFF : CLIENT_NOTE);
+  const live = liveInfo(await loadSettings(token));
+  const system = BASE + live + (who.staff ? STAFF : CLIENT_NOTE);
   let reply = await askGemini(key, system, msgs);
   if (!reply) return json(res, 502, { error: "L'assistant est indisponible pour le moment. Réessaie dans une minute ou consulte la FAQ." });
   reply = reply.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/(^|\s)\*([^*\n]+)\*/g, "$1$2").replace(/^#+\s*/gm, "");
