@@ -154,11 +154,11 @@ on conflict (number) do nothing;
 -- ---------------------------------------------------------------------
 -- Entier tiré d'un JSON, sans jamais lever d'erreur (valeur invalide → défaut)
 create or replace function public.vd_json_int(p jsonb, p_default int default 0)
-returns int language sql immutable as $$
+returns int language sql immutable set search_path = public as $$
   select case when jsonb_typeof(p) = 'number' then least(greatest((p #>> '{}')::numeric, -1000000), 1000000)::int else p_default end;
 $$;
 create or replace function public.vd_json_bool(p jsonb)
-returns boolean language sql immutable as $$
+returns boolean language sql immutable set search_path = public as $$
   select coalesce(p = 'true'::jsonb, false);
 $$;
 
@@ -597,7 +597,7 @@ $$;
 create extension if not exists pg_net with schema extensions;
 
 create or replace function public.vd_money_txt(p_cents int)
-returns text language sql immutable as $$
+returns text language sql immutable set search_path = public as $$
   select replace(to_char(p_cents / 100.0, 'FM999990.00'), '.', ',') || ' $';
 $$;
 
