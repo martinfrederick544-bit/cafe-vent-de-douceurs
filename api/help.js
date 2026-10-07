@@ -47,7 +47,9 @@ const STAFF = `
 - « Rapports » : choisir le mois ; ventes, recharges encaissées, remboursements, corrections, argent encore dans les portefeuilles, nombre de commandes et de boissons, boissons gratuites, tableau par jour, boissons populaires. Deux exports CSV (ouvrables dans Excel) : résumé par jour et détail des mouvements du portefeuille.
 - « Réglages » : photo de profil obligatoire ou non pour commander, découvert maximal autorisé (limite du solde négatif), seuil d'alerte « solde bas », notifications de l'appareil, mot de passe staff.
 - Notifications staff : « Activer les notifications » (Réglages ou bandeau de l'écran Commandes) : chaque appareil abonné reçoit « Nouvelle commande » même app fermée ; chaque appareil doit les activer.
-- Le staff ne peut pas réinitialiser le mot de passe d'un client : le client utilise « Mot de passe oublié ? ».`;
+- Le staff ne peut pas réinitialiser le mot de passe d'un client : le client utilise « Mot de passe oublié ? ».
+
+(L'utilisateur qui te parle est un MEMBRE DU STAFF, connecté à l'espace staff : explique-lui directement toutes les fonctions du staff, sans lui dire qu'elles sont réservées.)`;
 
 const CLIENT_NOTE = `
 
