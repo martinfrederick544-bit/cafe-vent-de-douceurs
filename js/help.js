@@ -192,12 +192,17 @@ async function helpSend(preset) {
     const { data } = await sb.auth.getSession();
     const token = data && data.session && data.session.access_token;
     if (!token) throw new Error("NO_SESSION");
-    const res = await fetch("/api/help", {
-      method: "POST", signal: ctl.signal,
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-      body: JSON.stringify({ messages: Help.chat }),
-    });
-    const j = await res.json().catch(() => ({}));
+    const call = async () => {
+      const res = await fetch("/api/help", {
+        method: "POST", signal: ctl.signal,
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ messages: Help.chat }),
+      });
+      return { res, j: await res.json().catch(() => null) };
+    };
+    let { res, j } = await call();
+    if (!j || res.status >= 500) { await new Promise((r) => setTimeout(r, 1200)); ({ res, j } = await call()); }  // 2e essai automatique
+    j = j || {};
     if (res.ok && j.reply) reply = j.reply;
     else if (j.error === "not_configured") reply = "L'assistant n'est pas encore activé. Consulte le Guide et la FAQ, ou demande au café.";
     else reply = j.error || "Désolé, l'assistant ne répond pas pour le moment.";

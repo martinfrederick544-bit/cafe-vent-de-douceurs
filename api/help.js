@@ -141,7 +141,7 @@ async function askGemini(key, system, msgs) {
   return "";
 }
 
-module.exports = async (req, res) => {
+async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { error: "method" });
   const key = process.env.GEMINI_API_KEY;
   if (!key) return json(res, 503, { error: "not_configured" });
@@ -167,4 +167,9 @@ module.exports = async (req, res) => {
   if (!reply) return json(res, 502, { error: "L'assistant est indisponible pour le moment. Réessaie dans une minute ou consulte la FAQ." });
   reply = reply.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/(^|\s)\*([^*\n]+)\*/g, "$1$2").replace(/^#+\s*/gm, "");
   return json(res, 200, { reply });
+}
+
+module.exports = async (req, res) => {
+  try { return await handler(req, res); }
+  catch (e) { console.error("help fatal", e && e.stack || e); return json(res, 500, { error: "Service momentanément indisponible. Réessaie dans un instant." }); }
 };
