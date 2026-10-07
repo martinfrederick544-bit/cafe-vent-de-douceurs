@@ -102,7 +102,7 @@ create table if not exists public.vd_push_subscriptions (
 
 -- ---------------------------------------------------------------------
 -- 2) RÉGLAGES PAR DÉFAUT (menu de lancement, périodes, horaires)
---    6 périodes ; les heures sont à renseigner par l'école (Staff > Horaires). Tant qu'elles sont vides, le café est considéré ouvert en tout temps.
+--    6 périodes (heures fournies par l'école le 2026-10-07), modifiables dans Staff > Horaires.
 -- ---------------------------------------------------------------------
 insert into public.vd_settings (id, menu, periods, hours)
 values (
@@ -130,12 +130,12 @@ values (
   $menu$::jsonb,
   $per$
   [
-    {"k":"P1","start":"","end":""},
-    {"k":"P2","start":"","end":""},
-    {"k":"P3","start":"","end":""},
-    {"k":"P4","start":"","end":""},
-    {"k":"P5","start":"","end":""},
-    {"k":"P6","start":"","end":""}
+    {"k":"P1","start":"09:00","end":"10:00"},
+    {"k":"P2","start":"10:05","end":"11:05"},
+    {"k":"P3","start":"11:07","end":"12:07"},
+    {"k":"P4","start":"12:07","end":"13:07"},
+    {"k":"P5","start":"13:10","end":"14:10"},
+    {"k":"P6","start":"14:15","end":"15:15"}
   ]
   $per$::jsonb,
   $hrs$
