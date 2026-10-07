@@ -35,6 +35,9 @@ body {
 }
 body.noscroll { overflow: hidden; }
 html, body { max-width: 100%; overflow-x: hidden; }
+/* textes sans espace (long mot, URL, commentaire collé) : on coupe au lieu d'élargir la page */
+body { overflow-wrap: anywhere; word-break: break-word; }
+.order, .orderHead .who, .userRow .meta, .itemLine .desc, .cartRow .info, .banner, .txRow > span { min-width: 0; max-width: 100%; }
 img, svg { max-width: 100%; }
 h1, h2, h3 { margin: 0; color: var(--espresso); }
 h2 { font-size: 1.1rem; margin-bottom: 8px; }
