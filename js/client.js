@@ -312,7 +312,8 @@ function photoPicker(label, onPhoto, small) {
 ========================================================= */
 function renderOrderScreen() {
   const p = State.profile;
-  if (!UI.draft.location) UI.draft.location = p.location || "";
+  // le local est toujours prérempli avec celui du compte (en essai staff, un local d'exemple si le profil n'en a pas)
+  if (!UI.draft.location) UI.draft.location = p.location || (testId() ? "Local d'essai" : "");
   const low = State.settings && p.balance_cents < State.settings.low_balance_cents;
 
   const banners = [];
@@ -435,7 +436,7 @@ async function submitOrder(btn, err) {
     }));
     const r = await placeOrder(newOrderId(), items, UI.draft.mode === "pickup" ? "" : UI.draft.location.trim(), UI.draft.comment.trim(), UI.draft.mode, UI.draft.useFree);
     UI.cart = []; saveCart();
-    UI.draft.comment = ""; UI.draft.useFree = false;
+    UI.draft.comment = ""; UI.draft.useFree = false; UI.draft.location = "";   // la prochaine commande repart du local du compte
     State.profile.balance_cents = r.balance_cents;
     await Promise.all([loadMyOrders(), loadMyTx(), loadLoyalty()]).catch(() => {});
     toast(testId() ? "✅ Commande de TEST envoyée (rien de réel)" : "✅ Commande envoyée au café !", "good");
