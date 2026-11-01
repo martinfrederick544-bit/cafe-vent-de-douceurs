@@ -16,15 +16,6 @@ function levelBadge(level) {
   const c = LEVEL_COLORS[level]; if (!c) return null;
   return h("span", { class: "levelBadge", style: "border-color:" + c + ";color:" + c }, LEVELS_SHORT[level]);
 }
-/** Aperçu du sirop choisi, encadré de la couleur de la quantité. */
-function syrupPreview(sy, list) {
-  const s = (list || []).find((x) => x.id === sy.id) || { name: sy.id, icon: "" };
-  const c = LEVEL_COLORS[sy.level] || "#888";
-  return h("div", { class: "syrupPreview", style: "border-color:" + c }, [
-    s.icon ? h("img", { src: iconUrl(s.icon), alt: "" }) : null,
-    h("div", {}, [h("b", {}, s.name), h("div", { class: "measure", style: "background:" + c }, LEVELS[sy.level])]),
-  ]);
-}
 
 /* ---------- mode test (cet appareil seulement) ---------- */
 /** Recharge tout ce que le mode test peut changer (après activation, effacement ou sortie). */
@@ -377,7 +368,7 @@ function renderCartCard() {
     card.appendChild(h("div", { class: "cartRow" }, [
       d.icon ? iconImg(d.icon, { class: "thumb", alt: "" }) : null,
       h("div", { class: "info" }, [
-        h("b", {}, d.name), h("small", {}, describeItem(it) || "Nature"), it.syrup ? levelBadge(it.syrup.level) : null,
+        h("b", {}, d.name), h("small", {}, describeItem(it) || "Nature"),
         h("div", { class: "row", style: "margin-top:6px;gap:6px" }, [
           h("button", { class: "btn sm", type: "button", onClick: () => openBuilder(it.drink, i) }, "Modifier"),
           h("button", { class: "btn sm", type: "button", onClick: () => { UI.cart.splice(i + 1, 0, JSON.parse(JSON.stringify(it))); saveCart(); render(); } }, "＋ Une autre"),
@@ -481,8 +472,7 @@ function openBuilder(drinkId, editIdx) {
     ]);
     if (b.syrup) {
       syrupBlock.appendChild(h("div", { class: "levelRow" }, [1, 2].map((lv) =>
-        h("button", { class: "btn" + (b.syrup.level === lv ? " on" : ""), type: "button", style: "border:3px solid " + LEVEL_COLORS[lv] + (b.syrup.level === lv ? ";background:" + LEVEL_COLORS[lv] + ";color:#fff" : ""), onClick: () => { b.syrup.level = lv; refresh(); } }, LEVELS[lv]))));
-      syrupBlock.appendChild(syrupPreview(b.syrup, syrups));
+        h("button", { class: "btn" + (b.syrup.level === lv ? " on" : ""), type: "button", onClick: () => { b.syrup.level = lv; refresh(); } }, LEVELS[lv]))));
     }
 
     const addons = h("div", {}, [h("h3", { style: "margin:16px 0 4px" }, "Ajouts")]);
@@ -559,7 +549,6 @@ function orderItemRows(o, compact) {
     h("div", { class: "desc" }, [
       h("b", {}, (count > 1 ? count + " × " : "") + it.name + (it.free ? "  🎁" : "")),
       h("div", { class: "muted small" }, describeItem(it) || "Nature"),
-      it.syrup ? levelBadge(it.syrup.level) : null,
       h("div", { class: "small" }, it.free ? "GRATUIT (fidélité)" : (count > 1 ? count + " × " + money(it.price_cents) + " = " + money(it.price_cents * count) : money(it.price_cents))),
     ]),
   ]));
