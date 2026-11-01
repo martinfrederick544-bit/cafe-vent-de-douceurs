@@ -16,7 +16,7 @@ const STAFF_TABS = [
 
 function staffShell(active, content) {
   const top = brandHeader([
-    h("a", { class: "btn sm", href: "#order" }, "Espace client"),
+    h("button", { class: "btn sm", type: "button", title: "Essayer l'app comme un client, sans rien de réel", onClick: async () => { if (!testId()) await setTestMode(true); go("order"); } }, "🧪 Essai client"),
     h("button", { class: "btn sm", type: "button", onClick: () => signOut() }, "Déconnexion"),
   ]);
   const tabs = h("div", { class: "tabs" }, STAFF_TABS.map(([r, label]) =>
@@ -619,6 +619,5 @@ function renderStaffSettings() {
     } }, "Enregistrer")]),
     h("p", { class: "muted small" }, "Le client reçoit une notification si sa tasse n'est pas revenue après ce délai (une seule fois par commande, vérifié chaque matin). Pour un client qui apporte sa propre tasse, coche « Tasse personnelle » sur sa commande : aucun rappel."),
   ]);
-  const testCard = h("div", { class: "card" }, [h("h2", {}, "🧪 Mode test (cet appareil)"), testToggleBlock("test")]);
-  return staffShell("staff_settings", [content, mugCard, testCard, passCard]);
+  return staffShell("staff_settings", [content, mugCard, passCard]);
 }

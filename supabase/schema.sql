@@ -308,6 +308,7 @@ begin
   -- mode test (appareil) : la commande est marquée, ne débite rien, ne compte nulle part et ne notifie personne
   v_test := nullif(trim(coalesce(p_test, '')), '');
   if v_test is not null and v_test !~ '^[A-Za-z0-9_-]{4,40}$' then raise exception 'BAD_ID'; end if;
+  if v_test is not null and not public.vd_is_staff() then raise exception 'NOT_STAFF'; end if;   -- le mode test n'existe que pour le staff
   if v_test is not null then
     delete from public.vd_orders where test_device is not null and created_at < now() - interval '3 days';
     delete from public.vd_wallet_tx where test_device is not null and created_at < now() - interval '3 days';

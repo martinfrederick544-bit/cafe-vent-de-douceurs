@@ -63,13 +63,6 @@ function testBanner() {
     ]),
   ]);
 }
-function testToggleBlock(label) {
-  const on = !!testId();
-  return h("div", {}, [
-    h("p", { class: "muted small" }, "Pour essayer l'app ou former quelqu'un sans rien de réel : en mode " + label + ", tu peux TOUT faire (commandes, recharges, changements de menu, de profil, de tasses…). Rien n'est enregistré pour de vrai, personne n'est notifié, et tout est effacé quand tu quittes le mode. Actif seulement sur cet appareil : aucune autre personne ni commande n'est touchée."),
-    h("button", { class: "btn block" + (on ? " bad" : ""), type: "button", onClick: () => setTestMode(!on) }, on ? "Quitter le mode " + label + " (efface mes essais)" : "🧪 Activer le mode " + label),
-  ]);
-}
 
 const UI = {
   cart: [],
@@ -671,9 +664,6 @@ function renderAccountScreen() {
     } }, "🔔 Activer les notifications"));
     extra.appendChild(h("p", { class: "muted small", style: "margin-top:6px" }, "On t'avise quand ta commande est prête."));
   }
-  extra.appendChild(h("div", { class: "divider" }));
-  extra.appendChild(h("h3", {}, "🧪 Mode essai"));
-  extra.appendChild(testToggleBlock("essai"));
   extra.appendChild(h("button", { class: "btn bad block", type: "button", style: "margin-top:14px", onClick: () => signOut() }, "Se déconnecter"));
 
   return clientShell("account", [h("div", { class: "grid2 even" }, [h("div", {}, [wallet, loyalty]), h("div", {}, [profile, extra])])]);

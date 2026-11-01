@@ -90,7 +90,12 @@ async function loadLoyalty() {
   if (d) State.loyalty = d;
 }
 /** Mode test de CET appareil (identifiant stocké localement ; vide = mode normal). */
-function testId() { try { return localStorage.getItem("vd_test_id") || ""; } catch (_e) { return ""; } }
+function testId() {
+  try {
+    if (State.profile && !State.profile.is_staff) { localStorage.removeItem("vd_test_id"); localStorage.removeItem("vd_test_ov"); return ""; }
+    return localStorage.getItem("vd_test_id") || "";
+  } catch (_e) { return ""; }
+}
 const testFilter = (q) => (testId() ? q.eq("test_device", testId()) : q.is("test_device", null));
 async function loadClientData() {
   await Promise.all([loadProfile(), loadSettings(), loadMyOrders(), loadMyTx(), loadLoyalty()]);
