@@ -315,7 +315,7 @@ begin
     select coalesce(sum(amount_cents), 0) into v_tbal from public.vd_wallet_tx where user_id = v_uid and test_device = v_test;
   end if;
   if v_test is null and v_set.require_photo and coalesce(v_prof.photo, '') = '' then raise exception 'PHOTO_REQUIRED'; end if;
-  if coalesce(trim(p_location), '') = '' then raise exception 'LOCATION_REQUIRED'; end if;
+  if p_mode is distinct from 'pickup' and coalesce(trim(p_location), '') = '' then raise exception 'LOCATION_REQUIRED'; end if;   -- le local n'est requis que pour une livraison
   if p_id is null or p_id !~ '^[A-Za-z0-9_-]{1,64}$' then raise exception 'BAD_ID'; end if;
   if p_mode not in ('deliver','pickup') then p_mode := 'deliver'; end if;
   if jsonb_typeof(p_items) is distinct from 'array'
@@ -401,7 +401,7 @@ begin
     (id, created_at_ms, user_id, user_name, default_location, location, mode, comment, status, items, total_cents, free_item, test_device)
   values
     (p_id, (extract(epoch from now()) * 1000)::bigint, v_uid, v_prof.name, v_prof.location,
-     left(trim(p_location), 80), p_mode, nullif(left(trim(coalesce(p_comment, '')), 300), ''), 'NOUVELLE', v_clean, v_total, v_free, v_test);
+     left(trim(coalesce(p_location, '')), 80), p_mode, nullif(left(trim(coalesce(p_comment, '')), 300), ''), 'NOUVELLE', v_clean, v_total, v_free, v_test);
 
   if v_total > 0 and v_test is null then
     update public.vd_profiles set balance_cents = v_new_bal where id = v_uid;

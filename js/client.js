@@ -393,8 +393,10 @@ function renderCartCard() {
     h("button", { class: "btn" + (UI.draft.mode === "pickup" ? " on" : ""), type: "button", onClick: () => { UI.draft.mode = "pickup"; render(); } }, "🚶 Je viens la chercher"),
   ]));
   if (UI.draft.mode === "pickup") card.appendChild(h("p", { class: "muted small", style: "margin:8px 0 0" }, State.settings.pickup_local ? "📍 Ramassage au local " + State.settings.pickup_local + " aujourd'hui." : "Le café t'indiquera le local de ramassage."));
-  card.appendChild(h("label", {}, "Local / endroit de livraison"));
-  card.appendChild(h("input", { value: UI.draft.location, placeholder: "Ex : Local 203", maxlength: "80", onInput: (e) => { UI.draft.location = e.target.value; } }));
+  if (UI.draft.mode !== "pickup") {   // le local n'est demandé que pour une livraison
+    card.appendChild(h("label", {}, "Local / endroit de livraison"));
+    card.appendChild(h("input", { value: UI.draft.location, placeholder: "Ex : Local 203", maxlength: "80", onInput: (e) => { UI.draft.location = e.target.value; } }));
+  }
   card.appendChild(h("label", {}, "Commentaire (optionnel)"));
   card.appendChild(h("textarea", { placeholder: "Ex : bien chaud, merci !", maxlength: "300", onInput: (e) => { UI.draft.comment = e.target.value; }, value: UI.draft.comment }));
 
@@ -416,7 +418,7 @@ async function submitOrder(btn, err) {
   const p = State.profile;
   const t = cartTotals();
   if (!UI.cart.length) return showErr(err, "Ton panier est vide.");
-  if (!(UI.draft.location || "").trim()) return showErr(err, "Entre un local de livraison.");
+  if (UI.draft.mode !== "pickup" && !(UI.draft.location || "").trim()) return showErr(err, "Entre un local de livraison.");
   if (State.settings.require_photo && !p.photo) return showErr(err, ERRORS_FR.PHOTO_REQUIRED);
   if (!testId() && p.balance_cents - t.total < -(State.settings.credit_limit_cents || 0)) return showErr(err, ERRORS_FR.CREDIT_LIMIT_REACHED);
   if (!isCafeOpenNow()) {
@@ -431,7 +433,7 @@ async function submitOrder(btn, err) {
       sweetener: it.sweetener || 0, marshmallows: !!it.marshmallows, dairy_free: !!it.dairy_free,
       extras: (it.extras || []).filter((x) => typeof x === "string"),
     }));
-    const r = await placeOrder(newOrderId(), items, UI.draft.location.trim(), UI.draft.comment.trim(), UI.draft.mode, UI.draft.useFree);
+    const r = await placeOrder(newOrderId(), items, UI.draft.mode === "pickup" ? "" : UI.draft.location.trim(), UI.draft.comment.trim(), UI.draft.mode, UI.draft.useFree);
     UI.cart = []; saveCart();
     UI.draft.comment = ""; UI.draft.useFree = false;
     State.profile.balance_cents = r.balance_cents;
