@@ -86,6 +86,13 @@ create index if not exists vd_wallet_tx_user_idx on public.vd_wallet_tx(user_id,
 -- Livraison : 2e groupe (compte partagé « livraison ») qui marque les commandes livrées
 alter table public.vd_profiles add column if not exists is_delivery boolean not null default false;
 alter table public.vd_orders   add column if not exists delivered_at timestamptz;
+alter table public.vd_orders   add column if not exists test_device text;            -- commande de test (mode test d'un appareil) : jamais comptée
+alter table public.vd_orders   add column if not exists personal_mug boolean not null default false;   -- le client a sa propre tasse : pas de rappel de retour
+alter table public.vd_orders   add column if not exists completed_at timestamptz;
+alter table public.vd_orders   add column if not exists mug_reminded_at timestamptz;
+alter table public.vd_settings add column if not exists pickup_local text not null default '';        -- local de ramassage du jour (changé par le staff)
+alter table public.vd_settings add column if not exists mug_reminder_hours int not null default 48;   -- rappel de retour de tasse (0 = désactivé)
+create index if not exists vd_orders_test_idx on public.vd_orders(test_device) where test_device is not null;
 
 -- Configuration interne (URL + secret du service de notifications) — jamais lisible côté navigateur
 create table if not exists public.vd_config (
@@ -205,11 +212,11 @@ returns jsonb language sql stable security definer set search_path = public as $
   with paid as (
     select count(*)::int as n
     from public.vd_orders o, jsonb_array_elements(o.items) it
-    where o.user_id = p_user and o.status <> 'ANNULÉE' and (it->>'price_cents')::int > 0
+    where o.user_id = p_user and o.test_device is null and o.status <> 'ANNULÉE' and (it->>'price_cents')::int > 0
   ), used as (
     select count(*)::int as n
     from public.vd_orders o
-    where o.user_id = p_user and o.status <> 'ANNULÉE' and o.free_item
+    where o.user_id = p_user and o.test_device is null and o.status <> 'ANNULÉE' and o.free_item
   )
   select jsonb_build_object(
     'paid',      paid.n,
@@ -257,9 +264,10 @@ $$;
 --     "marshmallows":bool,"dairy_free":bool}
 --    Une entrée = une tasse.
 -- ---------------------------------------------------------------------
+drop function if exists public.vd_place_order(text, jsonb, text, text, text, boolean);
 create or replace function public.vd_place_order(
   p_id text, p_items jsonb, p_location text, p_comment text,
-  p_mode text default 'deliver', p_use_free boolean default false
+  p_mode text default 'deliver', p_use_free boolean default false, p_test text default null
 ) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
@@ -285,6 +293,7 @@ declare
   v_exid     text;
   v_ex       jsonb;
   v_exclean  jsonb;
+  v_test     text;
 begin
   if v_uid is null then raise exception 'NOT_AUTHENTICATED'; end if;
 
@@ -292,6 +301,10 @@ begin
   if not found then raise exception 'NO_PROFILE'; end if;
 
   select * into v_set from public.vd_settings where id = 1;
+  -- mode test (appareil) : la commande est marquée, ne débite rien, ne compte nulle part et ne notifie personne
+  v_test := nullif(trim(coalesce(p_test, '')), '');
+  if v_test is not null and v_test !~ '^[A-Za-z0-9_-]{4,40}$' then raise exception 'BAD_ID'; end if;
+  if v_test is not null then delete from public.vd_orders where test_device is not null and created_at < now() - interval '3 days'; end if;
   if v_set.require_photo and coalesce(v_prof.photo, '') = '' then raise exception 'PHOTO_REQUIRED'; end if;
   if coalesce(trim(p_location), '') = '' then raise exception 'LOCATION_REQUIRED'; end if;
   if p_id is null or p_id !~ '^[A-Za-z0-9_-]{1,64}$' then raise exception 'BAD_ID'; end if;
@@ -360,7 +373,7 @@ begin
   end loop;
 
   -- Boisson gratuite (fidélité) : appliquée sur la boisson la plus chère du panier
-  if p_use_free then
+  if p_use_free and v_test is null then
     v_loy := public.vd_loyalty_for(v_uid);
     if (v_loy->>'available')::int <= 0 then raise exception 'NO_FREE_AVAILABLE'; end if;
     v_clean := jsonb_set(jsonb_set(v_clean, array[v_best_idx::text, 'price_cents'], '0'::jsonb),
@@ -371,21 +384,21 @@ begin
   select coalesce(sum((it->>'price_cents')::int), 0) into v_total from jsonb_array_elements(v_clean) it;
 
   v_new_bal := v_prof.balance_cents - v_total;
-  if v_new_bal < -v_set.credit_limit_cents then raise exception 'CREDIT_LIMIT_REACHED'; end if;
+  if v_test is null and v_new_bal < -v_set.credit_limit_cents then raise exception 'CREDIT_LIMIT_REACHED'; end if;
 
   insert into public.vd_orders
-    (id, created_at_ms, user_id, user_name, default_location, location, mode, comment, status, items, total_cents, free_item)
+    (id, created_at_ms, user_id, user_name, default_location, location, mode, comment, status, items, total_cents, free_item, test_device)
   values
     (p_id, (extract(epoch from now()) * 1000)::bigint, v_uid, v_prof.name, v_prof.location,
-     left(trim(p_location), 80), p_mode, nullif(left(trim(coalesce(p_comment, '')), 300), ''), 'NOUVELLE', v_clean, v_total, v_free);
+     left(trim(p_location), 80), p_mode, nullif(left(trim(coalesce(p_comment, '')), 300), ''), 'NOUVELLE', v_clean, v_total, v_free, v_test);
 
-  if v_total > 0 then
+  if v_total > 0 and v_test is null then
     update public.vd_profiles set balance_cents = v_new_bal where id = v_uid;
     insert into public.vd_wallet_tx (user_id, kind, amount_cents, balance_after, order_id, note)
     values (v_uid, 'order', -v_total, v_new_bal, p_id, 'Commande');
   end if;
 
-  return jsonb_build_object('id', p_id, 'total_cents', v_total, 'balance_cents', v_new_bal, 'free_item', v_free);
+  return jsonb_build_object('id', p_id, 'total_cents', v_total, 'balance_cents', case when v_test is null then v_new_bal else v_prof.balance_cents end, 'free_item', v_free);
 end;
 $$;
 
@@ -407,7 +420,7 @@ begin
   if v_o.status = 'ANNULÉE' then raise exception 'ORDER_ALREADY_CANCELLED'; end if;
 
   if p_status = 'ANNULÉE' then
-    if v_o.total_cents > 0 then
+    if v_o.total_cents > 0 and v_o.test_device is null then
       update public.vd_profiles set balance_cents = balance_cents + v_o.total_cents
        where id = v_o.user_id returning balance_cents into v_bal;
       insert into public.vd_wallet_tx (user_id, kind, amount_cents, balance_after, order_id, note, created_by)
@@ -416,7 +429,8 @@ begin
     update public.vd_cups set status = 'available', order_id = null, updated_at = now() where order_id = v_o.id;
   end if;
 
-  update public.vd_orders set status = p_status, delivered_at = null where id = p_order_id;
+  update public.vd_orders set status = p_status, delivered_at = null,
+    completed_at = case when p_status = 'COMPLÉTÉE' then now() else null end where id = p_order_id;
 end;
 $$;
 
@@ -428,6 +442,14 @@ declare
 begin
   perform public.vd_require_staff();
   if not exists (select 1 from public.vd_orders where id = p_order_id) then raise exception 'ORDER_NOT_FOUND'; end if;
+
+  if exists (select 1 from public.vd_orders where id = p_order_id and test_device is not null) then
+    -- commande de test : tasse « virtuelle », les vraies tasses ne sont pas touchées
+    select coalesce(p_cup, (select min(g) from generate_series(1, 300) g where g <> all ((select cup_numbers from public.vd_orders where id = p_order_id)::int[]))) into v_cup;
+    if v_cup = any ((select cup_numbers from public.vd_orders where id = p_order_id)::int[]) then raise exception 'CUP_NOT_AVAILABLE'; end if;
+    update public.vd_orders set cup_numbers = array_append(cup_numbers, v_cup) where id = p_order_id;
+    return v_cup;
+  end if;
 
   if p_cup is null then
     select number into v_cup from public.vd_cups where status = 'available' order by number limit 1 for update skip locked;
@@ -452,6 +474,12 @@ begin
   perform public.vd_require_staff();
   if p_count is null or p_count < 1 or p_count > 20 then raise exception 'BAD_COUNT'; end if;
   if not exists (select 1 from public.vd_orders where id = p_order_id) then raise exception 'ORDER_NOT_FOUND'; end if;
+  if exists (select 1 from public.vd_orders where id = p_order_id and test_device is not null) then
+    select array_agg(g order by g) into v_nums from (
+      select g from generate_series(1, 300) g where g <> all ((select cup_numbers from public.vd_orders where id = p_order_id)::int[]) order by g limit p_count) t;
+    update public.vd_orders set cup_numbers = cup_numbers || v_nums where id = p_order_id;
+    return v_nums;
+  end if;
   select array_agg(number order by number) into v_nums from (
     select number from public.vd_cups where status = 'available' order by number limit p_count for update
   ) c;
@@ -537,6 +565,8 @@ begin
     when 'require_photo'     then update public.vd_settings set require_photo = (p_value #>> '{}')::boolean, updated_at = now() where id = 1;
     when 'low_balance_cents' then update public.vd_settings set low_balance_cents = (p_value #>> '{}')::int, updated_at = now() where id = 1;
     when 'credit_limit_cents' then update public.vd_settings set credit_limit_cents = greatest((p_value #>> '{}')::int, 0), updated_at = now() where id = 1;
+    when 'pickup_local'      then update public.vd_settings set pickup_local = left(trim(coalesce(p_value #>> '{}', '')), 40), updated_at = now() where id = 1;
+    when 'mug_reminder_hours' then update public.vd_settings set mug_reminder_hours = least(greatest((p_value #>> '{}')::int, 0), 720), updated_at = now() where id = 1;
     else raise exception 'BAD_SETTING';
   end case;
 end;
@@ -554,7 +584,7 @@ begin
     select (to_timestamp(o.created_at_ms / 1000.0) at time zone 'America/Toronto')::date as d,
            o.total_cents, jsonb_array_length(o.items) as nb, o.free_item, o.items
       from public.vd_orders o
-     where o.status <> 'ANNULÉE'
+     where o.status <> 'ANNULÉE' and o.test_device is null
   ), ord_r as (
     select * from ord where d between p_from and p_to
   ), tx_r as (
@@ -701,6 +731,7 @@ $$;
 create or replace function public.vd_trg_order_insert()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
+  if new.test_device is not null then return new; end if;
   perform public.vd_push_dispatch(jsonb_build_object(
     'title', 'Nouvelle commande ☕',
     'body',  new.user_name || ' — ' || case when new.mode = 'pickup' then 'ramassage' else new.location end,
@@ -712,7 +743,11 @@ $$;
 
 create or replace function public.vd_trg_order_update()
 returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_loc text;
 begin
+  if new.test_device is not null then return new; end if;
+  select pickup_local into v_loc from public.vd_settings where id = 1;
   if new.status is distinct from old.status and new.user_id is not null then
     if new.status = 'COMPLÉTÉE' and new.mode = 'deliver' then
       -- livraison : le groupe livraison est prévenu ; le client le sera quand ce sera « livré »
@@ -725,9 +760,10 @@ begin
     elsif new.status = 'COMPLÉTÉE' then
       perform public.vd_push_dispatch(jsonb_build_object(
         'title', 'Commande prête ✅',
-        'body',  case when coalesce(array_length(new.cup_numbers, 1), 0) > 0
+        'body',  (case when coalesce(array_length(new.cup_numbers, 1), 0) > 0
                       then 'Ta boisson est prête — tasse n° ' || array_to_string(new.cup_numbers, ', ')
-                      else 'Ta boisson est prête !' end,
+                      else 'Ta boisson est prête !' end)
+                 || (case when new.mode = 'pickup' and coalesce(v_loc, '') <> '' then ' Ramassage : ' || v_loc else '' end),
         'url', '/#orders', 'tag', 'done_' || new.id,
         'subs', public.vd_push_subs('client', new.user_id)));
     elsif new.status = 'ANNULÉE' then
@@ -769,7 +805,7 @@ create trigger vd_order_update_push after update of status on public.vd_orders
 create or replace function public.vd_trg_order_delivered()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  if old.delivered_at is null and new.delivered_at is not null and new.user_id is not null and new.status = 'COMPLÉTÉE' then
+  if old.delivered_at is null and new.delivered_at is not null and new.user_id is not null and new.test_device is null and new.status = 'COMPLÉTÉE' then
     perform public.vd_push_dispatch(jsonb_build_object(
       'title', 'Commande livrée ✅',
       'body',  'Ta boisson vient d''être livrée. Bon café !',
@@ -841,7 +877,7 @@ alter default privileges in schema public revoke execute on functions from publi
 grant execute on function
   public.vd_is_staff(), public.vd_my_loyalty(),
   public.vd_update_my_profile(text, text), public.vd_set_my_photo(text),
-  public.vd_place_order(text, jsonb, text, text, text, boolean),
+  public.vd_place_order(text, jsonb, text, text, text, boolean, text),
   public.vd_staff_set_status(text, text), public.vd_staff_assign_cup(text, int),
   public.vd_staff_assign_cups(text, int),
   public.vd_staff_return_cup(int), public.vd_staff_set_cup_count(int),
@@ -904,7 +940,8 @@ returns boolean language sql stable security definer set search_path = public as
 $$;
 
 -- Commandes à livrer (mode livraison, complétées, pas encore livrées) + livrées depuis 2 h (pour annuler une erreur)
-create or replace function public.vd_delivery_list()
+drop function if exists public.vd_delivery_list();
+create or replace function public.vd_delivery_list(p_test text default null)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 begin
   if not (public.vd_is_delivery() or public.vd_is_staff()) then raise exception 'NOT_DELIVERY'; end if;
@@ -913,6 +950,7 @@ begin
       select o.id, o.user_name, o.location, o.cup_numbers, o.items, o.comment, o.created_at_ms, o.delivered_at, p.photo
         from public.vd_orders o left join public.vd_profiles p on p.id = o.user_id
        where o.mode = 'deliver' and o.status = 'COMPLÉTÉE'
+         and o.test_device is not distinct from nullif(trim(coalesce(p_test, '')), '')
          and ((o.delivered_at is null and o.created_at_ms > (extract(epoch from now()) * 1000)::bigint - 86400000)
               or o.delivered_at > now() - interval '2 hours')
     ) x), '[]'::jsonb);
@@ -935,5 +973,87 @@ $$;
 drop function if exists public.vd_staff_set_delivery_password(text);
 
 revoke execute on function public.vd_trg_order_delivered() from public, anon, authenticated;
-revoke execute on function public.vd_is_delivery(), public.vd_delivery_list(), public.vd_delivery_mark(text, boolean) from public, anon, authenticated;
-grant execute on function public.vd_is_delivery(), public.vd_delivery_list(), public.vd_delivery_mark(text, boolean) to authenticated;
+revoke execute on function public.vd_is_delivery(), public.vd_delivery_list(text), public.vd_delivery_mark(text, boolean) from public, anon, authenticated;
+grant execute on function public.vd_is_delivery(), public.vd_delivery_list(text), public.vd_delivery_mark(text, boolean) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 11) Suppression de commande, mode test, tasse personnelle, rappels de retour de tasse
+-- ---------------------------------------------------------------------
+-- Supprime une commande (test ou doublon). Une vraie commande non annulée est d'abord remboursée ; les tasses sont libérées.
+create or replace function public.vd_staff_delete_order(p_order_id text)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_o   public.vd_orders%rowtype;
+  v_bal int;
+begin
+  perform public.vd_require_staff();
+  select * into v_o from public.vd_orders where id = p_order_id for update;
+  if not found then raise exception 'ORDER_NOT_FOUND'; end if;
+  if v_o.test_device is null and v_o.status <> 'ANNULÉE' and v_o.total_cents > 0 and v_o.user_id is not null then
+    update public.vd_profiles set balance_cents = balance_cents + v_o.total_cents where id = v_o.user_id returning balance_cents into v_bal;
+    insert into public.vd_wallet_tx (user_id, kind, amount_cents, balance_after, order_id, note, created_by)
+    values (v_o.user_id, 'refund', v_o.total_cents, v_bal, v_o.id, 'Commande supprimée', auth.uid());
+  end if;
+  update public.vd_cups set status = 'available', order_id = null, updated_at = now() where order_id = v_o.id;
+  delete from public.vd_orders where id = p_order_id;
+end;
+$$;
+
+-- Efface les commandes de test d'un appareil (le staff : toutes celles de l'appareil ; un client : seulement les siennes)
+create or replace function public.vd_test_clear(p_test text)
+returns int language plpgsql security definer set search_path = public as $$
+declare
+  v_n int;
+begin
+  if auth.uid() is null then raise exception 'NOT_AUTHENTICATED'; end if;
+  if p_test is null or p_test !~ '^[A-Za-z0-9_-]{4,40}$' then raise exception 'BAD_ID'; end if;
+  delete from public.vd_orders where test_device = p_test and (user_id = auth.uid() or public.vd_is_staff());
+  get diagnostics v_n = row_count;
+  return v_n;
+end;
+$$;
+
+create or replace function public.vd_staff_set_personal_mug(p_order_id text, p_value boolean)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  perform public.vd_require_staff();
+  update public.vd_orders set personal_mug = coalesce(p_value, false) where id = p_order_id;
+  if not found then raise exception 'ORDER_NOT_FOUND'; end if;
+end;
+$$;
+
+-- Rappel de retour de tasse (appelée chaque jour par Vercel Cron avec le secret) : une notification par commande
+create or replace function public.vd_mug_reminders(p_secret text)
+returns int language plpgsql security definer set search_path = public as $$
+declare
+  v_h int;
+  v_n int := 0;
+  r   record;
+begin
+  if p_secret is distinct from (select value from public.vd_config where key = 'push_secret') then raise exception 'FORBIDDEN'; end if;
+  select mug_reminder_hours into v_h from public.vd_settings where id = 1;
+  if coalesce(v_h, 0) <= 0 then return 0; end if;
+  for r in
+    select o.id, o.user_id,
+           (select string_agg(c.number::text, ', ' order by c.number) from public.vd_cups c where c.order_id = o.id and c.status = 'in_use') as cups
+      from public.vd_orders o
+     where o.status = 'COMPLÉTÉE' and not o.personal_mug and o.test_device is null and o.user_id is not null
+       and o.mug_reminded_at is null
+       and coalesce(o.completed_at, o.created_at) < now() - make_interval(hours => v_h)
+       and exists (select 1 from public.vd_cups c where c.order_id = o.id and c.status = 'in_use')
+  loop
+    perform public.vd_push_dispatch(jsonb_build_object(
+      'title', 'Ta tasse t''attend ☕',
+      'body',  'Pense à rapporter la tasse n° ' || r.cups || ' au café.',
+      'url', '/#orders', 'tag', 'mug_' || r.id,
+      'subs', public.vd_push_subs('client', r.user_id)));
+    update public.vd_orders set mug_reminded_at = now() where id = r.id;
+    v_n := v_n + 1;
+  end loop;
+  return v_n;
+end;
+$$;
+
+revoke execute on function public.vd_staff_delete_order(text), public.vd_test_clear(text), public.vd_staff_set_personal_mug(text, boolean), public.vd_mug_reminders(text) from public, anon, authenticated;
+grant execute on function public.vd_staff_delete_order(text), public.vd_test_clear(text), public.vd_staff_set_personal_mug(text, boolean) to authenticated;
+grant execute on function public.vd_mug_reminders(text) to anon, authenticated;

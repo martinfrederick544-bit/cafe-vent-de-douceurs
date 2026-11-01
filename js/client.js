@@ -10,6 +10,56 @@ const ADDONS = [
 ];
 const LEVELS = { 1: "½ c. à thé · léger", 2: "1 c. à thé · prononcé" };
 const LEVELS_SHORT = { 1: "½ c. à thé", 2: "1 c. à thé" };
+/** Couleurs demandées par l'école pour repérer la quantité de sirop : vert = ½ c. à thé, bleu = 1 c. à thé. */
+const LEVEL_COLORS = { 1: "#2fa84f", 2: "#1e8fd5" };
+function levelBadge(level) {
+  const c = LEVEL_COLORS[level]; if (!c) return null;
+  return h("span", { class: "levelBadge", style: "border-color:" + c + ";color:" + c }, LEVELS_SHORT[level]);
+}
+/** Aperçu du sirop choisi, encadré de la couleur de la quantité. */
+function syrupPreview(sy, list) {
+  const s = (list || []).find((x) => x.id === sy.id) || { name: sy.id, icon: "" };
+  const c = LEVEL_COLORS[sy.level] || "#888";
+  return h("div", { class: "syrupPreview", style: "border-color:" + c }, [
+    s.icon ? h("img", { src: iconUrl(s.icon), alt: "" }) : null,
+    h("div", {}, [h("b", {}, s.name), h("div", { class: "measure", style: "background:" + c }, LEVELS[sy.level])]),
+  ]);
+}
+
+/* ---------- mode test (cet appareil seulement) ---------- */
+async function setTestMode(on) {
+  const id = testId();
+  try {
+    if (!on && id) await testClear(id).catch((e) => console.warn(e));
+    if (on) localStorage.setItem("vd_test_id", "t" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36));
+    else localStorage.removeItem("vd_test_id");
+  } catch (_e) {}
+  const staff = State.profile && State.profile.is_staff;
+  try { await Promise.all([loadMyOrders(), loadLoyalty(), staff ? loadStaffOrders() : null, staff ? loadDelivery().catch(() => {}) : null]); } catch (e) { console.warn(e); }
+  toast(on ? "Mode test activé sur cet appareil 🧪" : "Mode test quitté, essais effacés", "good");
+  render();
+}
+function testBanner() {
+  if (!testId()) return null;
+  return h("div", { class: "banner testBanner" }, [
+    h("b", {}, "🧪 MODE TEST — sur cet appareil seulement. "),
+    "Rien n'est réel : aucun argent débité, rien dans les rapports, personne n'est notifié.",
+    h("div", { class: "row", style: "margin-top:8px" }, [
+      h("button", { class: "btn sm", type: "button", onClick: async () => {
+        try { const n = await testClear(testId()); await Promise.all([loadMyOrders(), State.profile && State.profile.is_staff ? loadStaffOrders() : null, State.profile && State.profile.is_staff ? loadDelivery().catch(() => {}) : null]); toast(n ? n + " commande(s) de test effacée(s)" : "Rien à effacer", "good"); render(); }
+        catch (e) { toast(errText(e), "bad"); }
+      } }, "🧹 Effacer mes tests"),
+      h("button", { class: "btn sm bad", type: "button", onClick: () => setTestMode(false) }, "Quitter le mode test"),
+    ]),
+  ]);
+}
+function testToggleBlock(label) {
+  const on = !!testId();
+  return h("div", {}, [
+    h("p", { class: "muted small" }, "Pour essayer l'app ou former quelqu'un sans rien de réel : ce que tu fais en mode " + label + " ne débite aucun portefeuille, ne compte dans aucun rapport et n'avertit personne. Actif seulement sur cet appareil, et n'affecte aucune autre personne ni commande."),
+    h("button", { class: "btn block" + (on ? " bad" : ""), type: "button", onClick: () => setTestMode(!on) }, on ? "Quitter le mode " + label + " (efface mes essais)" : "🧪 Activer le mode " + label),
+  ]);
+}
 
 const UI = {
   cart: [],
@@ -216,7 +266,7 @@ function clientShell(active, content) {
     ["order", "☕", "Commander"], ["orders", "🧾", "Mes commandes"], ["account", "👤", "Mon compte"],
   ].map(([r, ico, label]) => h("button", { class: "tab" + (active === r ? " active" : ""), type: "button", onClick: () => go(r) },
     [h("span", { class: "ico" }, ico), h("span", { class: "lbl" }, label)])));
-  return h("div", {}, [top, h("main", { class: "wrap" }, content), nav]);
+  return h("div", {}, [top, h("main", { class: "wrap" }, [testBanner(), content]), nav]);
 }
 
 /** Invitation à activer les notifications (une fois, masquable). */
@@ -279,6 +329,7 @@ function renderOrderScreen() {
   if (!isCafeOpenNow()) banners.push(h("div", { class: "banner" }, [h("b", {}, "Le café est fermé en ce moment. "), "Tu peux quand même préparer ta commande : elle sera servie à la prochaine période d'ouverture."]));
   if (State.loyalty.available > 0) banners.push(h("div", { class: "banner good" }, ["🎁 Tu as ", h("b", {}, String(State.loyalty.available)), " boisson(s) gratuite(s) à utiliser dans ton panier !"]));
 
+  if (State.settings.pickup_local) banners.push(h("div", { class: "banner" }, ["📍 Local de ramassage aujourd'hui : ", h("b", {}, State.settings.pickup_local)]));
   const drinks = (menu().drinks || []);
   const grid = h("div", { class: "drinkGrid" }, drinks.map((d) =>
     h("button", { class: "drinkCard" + (d.available === false ? " off" : ""), type: "button", onClick: () => openBuilder(d.id) }, [
@@ -323,7 +374,7 @@ function renderCartCard() {
     card.appendChild(h("div", { class: "cartRow" }, [
       d.icon ? iconImg(d.icon, { class: "thumb", alt: "" }) : null,
       h("div", { class: "info" }, [
-        h("b", {}, d.name), h("small", {}, describeItem(it) || "Nature"),
+        h("b", {}, d.name), h("small", {}, describeItem(it) || "Nature"), it.syrup ? levelBadge(it.syrup.level) : null,
         h("div", { class: "row", style: "margin-top:6px;gap:6px" }, [
           h("button", { class: "btn sm", type: "button", onClick: () => openBuilder(it.drink, i) }, "Modifier"),
           h("button", { class: "btn sm", type: "button", onClick: () => { UI.cart.splice(i + 1, 0, JSON.parse(JSON.stringify(it))); saveCart(); render(); } }, "＋ Une autre"),
@@ -347,6 +398,7 @@ function renderCartCard() {
     h("button", { class: "btn" + (UI.draft.mode === "deliver" ? " on" : ""), type: "button", onClick: () => { UI.draft.mode = "deliver"; render(); } }, "🛒 Livrer à mon local"),
     h("button", { class: "btn" + (UI.draft.mode === "pickup" ? " on" : ""), type: "button", onClick: () => { UI.draft.mode = "pickup"; render(); } }, "🚶 Je viens la chercher"),
   ]));
+  if (UI.draft.mode === "pickup") card.appendChild(h("p", { class: "muted small", style: "margin:8px 0 0" }, State.settings.pickup_local ? "📍 Ramassage au local " + State.settings.pickup_local + " aujourd'hui." : "Le café t'indiquera le local de ramassage."));
   card.appendChild(h("label", {}, "Local / endroit de livraison"));
   card.appendChild(h("input", { value: UI.draft.location, placeholder: "Ex : Local 203", maxlength: "80", onInput: (e) => { UI.draft.location = e.target.value; } }));
   card.appendChild(h("label", {}, "Commentaire (optionnel)"));
@@ -372,7 +424,7 @@ async function submitOrder(btn, err) {
   if (!UI.cart.length) return showErr(err, "Ton panier est vide.");
   if (!(UI.draft.location || "").trim()) return showErr(err, "Entre un local de livraison.");
   if (State.settings.require_photo && !p.photo) return showErr(err, ERRORS_FR.PHOTO_REQUIRED);
-  if (p.balance_cents - t.total < -(State.settings.credit_limit_cents || 0)) return showErr(err, ERRORS_FR.CREDIT_LIMIT_REACHED);
+  if (!testId() && p.balance_cents - t.total < -(State.settings.credit_limit_cents || 0)) return showErr(err, ERRORS_FR.CREDIT_LIMIT_REACHED);
   if (!isCafeOpenNow()) {
     const ok = await confirmDialog("Le café n'est pas ouvert",
       "Veux-tu quand même envoyer ta commande ?\n\nElle sera préparée à la prochaine période d'ouverture.", "Poursuivre ma commande", "Annuler");
@@ -390,7 +442,7 @@ async function submitOrder(btn, err) {
     UI.draft.comment = ""; UI.draft.useFree = false;
     State.profile.balance_cents = r.balance_cents;
     await Promise.all([loadMyOrders(), loadMyTx(), loadLoyalty()]).catch(() => {});
-    toast("✅ Commande envoyée au café !", "good");
+    toast(testId() ? "✅ Commande de TEST envoyée (rien de réel)" : "✅ Commande envoyée au café !", "good");
     go("orders");
   } catch (e) {
     console.warn(e);
@@ -426,7 +478,8 @@ function openBuilder(drinkId, editIdx) {
     ]);
     if (b.syrup) {
       syrupBlock.appendChild(h("div", { class: "levelRow" }, [1, 2].map((lv) =>
-        h("button", { class: "btn" + (b.syrup.level === lv ? " on" : ""), type: "button", onClick: () => { b.syrup.level = lv; refresh(); } }, LEVELS[lv]))));
+        h("button", { class: "btn" + (b.syrup.level === lv ? " on" : ""), type: "button", style: "border:3px solid " + LEVEL_COLORS[lv] + (b.syrup.level === lv ? ";background:" + LEVEL_COLORS[lv] + ";color:#fff" : ""), onClick: () => { b.syrup.level = lv; refresh(); } }, LEVELS[lv]))));
+      syrupBlock.appendChild(syrupPreview(b.syrup, syrups));
     }
 
     const addons = h("div", {}, [h("h3", { style: "margin:16px 0 4px" }, "Ajouts")]);
@@ -503,6 +556,7 @@ function orderItemRows(o, compact) {
     h("div", { class: "desc" }, [
       h("b", {}, (count > 1 ? count + " × " : "") + it.name + (it.free ? "  🎁" : "")),
       h("div", { class: "muted small" }, describeItem(it) || "Nature"),
+      it.syrup ? levelBadge(it.syrup.level) : null,
       h("div", { class: "small" }, it.free ? "GRATUIT (fidélité)" : (count > 1 ? count + " × " + money(it.price_cents) + " = " + money(it.price_cents * count) : money(it.price_cents))),
     ]),
   ]));
@@ -518,7 +572,7 @@ function renderMyOrdersScreen() {
       h("div", { class: "orderHead" }, [
         h("div", { class: "who" }, [
           h("b", {}, `${fmtDate(o.created_at_ms)} • ${fmtTime(o.created_at_ms)}`),
-          h("div", { class: "muted small" }, `${o.mode === "pickup" ? "Ramassage" : "Livraison : " + o.location} · Total ${money(o.total_cents)}`),
+          h("div", { class: "muted small" }, `${o.mode === "pickup" ? "Ramassage" + (State.settings && State.settings.pickup_local && o.status !== "ANNULÉE" ? " (local " + State.settings.pickup_local + ")" : "") : "Livraison : " + o.location} · Total ${money(o.total_cents)}`),
         ]),
         h("span", { class: "status " + o.status }, o.status === "COMPLÉTÉE" && o.mode === "deliver" ? (o.delivered_at ? "LIVRÉE" : "EN LIVRAISON") : o.status),
       ]),
@@ -607,7 +661,10 @@ function renderAccountScreen() {
     } }, "🔔 Activer les notifications"));
     extra.appendChild(h("p", { class: "muted small", style: "margin-top:6px" }, "On t'avise quand ta commande est prête."));
   }
-  extra.appendChild(h("button", { class: "btn bad block", type: "button", style: "margin-top:10px", onClick: () => signOut() }, "Se déconnecter"));
+  extra.appendChild(h("div", { class: "divider" }));
+  extra.appendChild(h("h3", {}, "🧪 Mode essai"));
+  extra.appendChild(testToggleBlock("essai"));
+  extra.appendChild(h("button", { class: "btn bad block", type: "button", style: "margin-top:14px", onClick: () => signOut() }, "Se déconnecter"));
 
   return clientShell("account", [h("div", { class: "grid2 even" }, [h("div", {}, [wallet, loyalty]), h("div", {}, [profile, extra])])]);
 }

@@ -140,6 +140,7 @@ function clearSession() {
   StaffUI.report = null; StaffUI.reportTried = false; StaffUI.menuDraft = null;
 }
 async function signOut() {
+  try { const t = testId(); if (t) { await testClear(t).catch(() => {}); localStorage.removeItem("vd_test_id"); } } catch (_e) {}
   await unsubscribePushForThisDevice();
   try { await sb.auth.signOut(); } catch (_e) {}
   clearSession();

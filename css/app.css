@@ -381,3 +381,11 @@ button.addon:active { transform: scale(.97); }
 .order.deliv.done { opacity: .7; }
 .btn.big { min-height: 56px; font-size: 1.15rem; width: 100%; }
 table.tbl { min-width: 0; font-size: .8rem; } table.tbl th, table.tbl td { padding: 7px 4px; }
+
+/* ---- sirop : couleurs des quantités (vert = ½ c. à thé, bleu = 1 c. à thé) ---- */
+.levelBadge { display: inline-block; margin: 4px 0 0; padding: 2px 10px; border: 3px solid; border-radius: 10px; font-weight: 800; font-size: .8rem; background: #fff; }
+.syrupPreview { display: flex; align-items: center; gap: 14px; margin-top: 12px; padding: 10px; border: 6px solid; border-radius: 18px; background: #fff; }
+.syrupPreview img { width: 84px; height: 84px; object-fit: contain; border-radius: 12px; flex: none; }
+.syrupPreview .measure { display: inline-block; margin-top: 6px; padding: 4px 14px; border-radius: 999px; color: #fff; font-weight: 800; }
+/* ---- mode test ---- */
+.testBanner { background: #fff3cd; border-color: #e0a800; color: #5c4400; }

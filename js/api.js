@@ -46,8 +46,8 @@ async function loadSettings() {
 /* ---------- client ---------- */
 async function loadMyOrders() {
   if (!State.session) return;
-  State.myOrders = unwrap(await sb.from("vd_orders").select("*")
-    .eq("user_id", State.session.user.id).order("created_at_ms", { ascending: false }).limit(60)) || [];
+  State.myOrders = unwrap(await testFilter(sb.from("vd_orders").select("*")
+    .eq("user_id", State.session.user.id)).order("created_at_ms", { ascending: false }).limit(60)) || [];
 }
 async function loadMyTx() {
   if (!State.session) return;
@@ -58,12 +58,15 @@ async function loadLoyalty() {
   const d = unwrap(await sb.rpc("vd_my_loyalty"));
   if (d) State.loyalty = d;
 }
+/** Mode test de CET appareil (identifiant stocké localement ; vide = mode normal). */
+function testId() { try { return localStorage.getItem("vd_test_id") || ""; } catch (_e) { return ""; } }
+const testFilter = (q) => (testId() ? q.eq("test_device", testId()) : q.is("test_device", null));
 async function loadClientData() {
   await Promise.all([loadProfile(), loadSettings(), loadMyOrders(), loadMyTx(), loadLoyalty()]);
 }
 async function placeOrder(id, items, location, comment, mode, useFree) {
   const d = unwrap(await sb.rpc("vd_place_order", {
-    p_id: id, p_items: items, p_location: location, p_comment: comment || "", p_mode: mode, p_use_free: !!useFree,
+    p_id: id, p_items: items, p_location: location, p_comment: comment || "", p_mode: mode, p_use_free: !!useFree, p_test: testId() || null,
   }));
   return d;
 }
@@ -74,9 +77,9 @@ async function setMyPhoto(dataUrl) { unwrap(await sb.rpc("vd_set_my_photo", { p_
 async function loadStaffOrders() {
   const [from, to] = dayRangeMs(State.staffDate);
   const [day, pending] = await Promise.all([
-    sb.from("vd_orders").select("*").gte("created_at_ms", from).lt("created_at_ms", to).order("created_at_ms", { ascending: false }).limit(500),
+    testFilter(sb.from("vd_orders").select("*").gte("created_at_ms", from).lt("created_at_ms", to)).order("created_at_ms", { ascending: false }).limit(500),
     // commandes encore « nouvelles » d'une autre journée (ex. passées après la fermeture)
-    sb.from("vd_orders").select("*").eq("status", "NOUVELLE").lt("created_at_ms", from).order("created_at_ms", { ascending: false }).limit(100),
+    testFilter(sb.from("vd_orders").select("*").eq("status", "NOUVELLE").lt("created_at_ms", from)).order("created_at_ms", { ascending: false }).limit(100),
   ]);
   const rows = (unwrap(day) || []).concat(unwrap(pending) || []);
   State.staffOrders = rows;
@@ -102,7 +105,10 @@ async function ensurePhotos(ids) {
 async function staffSetStatus(orderId, status) { unwrap(await sb.rpc("vd_staff_set_status", { p_order_id: orderId, p_status: status })); }
 async function staffAssignCup(orderId, cup) { return unwrap(await sb.rpc("vd_staff_assign_cup", { p_order_id: orderId, p_cup: cup === undefined ? null : cup })); }
 async function staffAssignCups(orderId, count) { return unwrap(await sb.rpc("vd_staff_assign_cups", { p_order_id: orderId, p_count: count })); }
-async function loadDelivery() { State.delivery = unwrap(await sb.rpc("vd_delivery_list")) || []; }
+async function loadDelivery() { State.delivery = unwrap(await sb.rpc("vd_delivery_list", { p_test: testId() || null })) || []; }
+async function staffDeleteOrder(orderId) { unwrap(await sb.rpc("vd_staff_delete_order", { p_order_id: orderId })); }
+async function staffSetPersonalMug(orderId, v) { unwrap(await sb.rpc("vd_staff_set_personal_mug", { p_order_id: orderId, p_value: !!v })); }
+async function testClear(id) { return unwrap(await sb.rpc("vd_test_clear", { p_test: id })); }
 async function deliveryMark(orderId, delivered) { unwrap(await sb.rpc("vd_delivery_mark", { p_order_id: orderId, p_delivered: delivered !== false })); }
 async function staffReturnCup(cup) { unwrap(await sb.rpc("vd_staff_return_cup", { p_cup: cup })); }
 async function staffSetCupCount(n) { unwrap(await sb.rpc("vd_staff_set_cup_count", { p_count: n })); }

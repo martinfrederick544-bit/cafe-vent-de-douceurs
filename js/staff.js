@@ -21,7 +21,7 @@ function staffShell(active, content) {
   ]);
   const tabs = h("div", { class: "tabs" }, STAFF_TABS.map(([r, label]) =>
     h("button", { class: "tab" + (active === r ? " active" : ""), type: "button", onClick: () => go(r) }, label)));
-  return h("div", {}, [top, tabs, h("main", { class: "wrap" }, content)]);
+  return h("div", {}, [top, tabs, h("main", { class: "wrap" }, [testBanner(), content])]);
 }
 
 /* ---------- connexion staff : un seul mot de passe pour tout le café ---------- */
@@ -70,6 +70,10 @@ function renderStaffOrders() {
   const sales = orders.filter((o) => o.status !== "ANNULÉE" && dateKey(o.created_at_ms) === State.staffDate).reduce((s, o) => s + o.total_cents, 0);
 
   const noPhoto = newOrders.filter((o) => !State.photoCache[o.user_id]).length;
+  const pickInput = h("input", { value: State.settings.pickup_local || "", placeholder: "Ex : Local 118", maxlength: "40", style: "max-width:200px", "aria-label": "Local de ramassage du jour" });
+  const pickSave = h("button", { class: "btn sm good", type: "button", onClick: async () => {
+    try { await staffSaveSetting("pickup_local", pickInput.value.trim()); await loadSettings(); toast("Local de ramassage enregistré ✅", "good"); render(); } catch (e) { toast(errText(e), "bad"); }
+  } }, "Enregistrer");
 
   return staffShell("staff", [
     h("div", { class: "card" }, h("div", { class: "row between" }, [
@@ -77,6 +81,7 @@ function renderStaffOrders() {
       h("div", { class: "row" }, [h("span", { class: "pill" }, ["Ventes du jour : ", h("b", {}, money(sales))]), h("span", { class: "pill" }, ["Tasses libres : ", h("b", {}, `${State.cups.filter((c) => c.status === "available").length}/${State.cups.length}`)])]),
     ])),
     notifBanner("staff"),
+    h("div", { class: "card" }, h("div", { class: "row" }, [h("b", {}, "📍 Local de ramassage du jour"), pickInput, pickSave, h("span", { class: "muted small" }, "Affiché aux clients qui viennent chercher leur boisson.")])),
     noPhoto ? h("div", { class: "banner warn" }, `${noPhoto} commande(s) de clients sans photo de profil — ajoute-les dans l'onglet Clients.`) : null,
     h("div", { class: "staffCols" }, [
       h("div", {}, [h("div", { class: "colHead" }, [h("h2", { style: "margin:0" }, "Nouvelles"), h("span", { class: "count" }, String(newOrders.length))]),
@@ -108,12 +113,12 @@ function staffOrderCard(o) {
 
   const actions = h("div", { class: "actions" });
   const nDrinks = (o.items || []).length;
-  const missing = Math.max(0, nDrinks - cups.length);
+  const missing = o.personal_mug ? 0 : Math.max(0, nDrinks - cups.length);
   if (o.status === "NOUVELLE") {
-    actions.appendChild(mk("", "＋ Tasse auto", (b) => run(b, async () => { const n = await staffAssignCup(o.id); toast(`Tasse n° ${n} attribuée`, "good"); })));
+    if (!o.personal_mug) actions.appendChild(mk("", "＋ Tasse auto", (b) => run(b, async () => { const n = await staffAssignCup(o.id); toast(`Tasse n° ${n} attribuée`, "good"); })));
     if (missing > 1) actions.appendChild(mk("", `＋ Toutes les tasses (${missing})`, (b) => run(b, async () => { const ns = await staffAssignCups(o.id, missing); toast(`Tasses ${ns.join(", ")} attribuées`, "good"); })));
     const avail = State.cups.filter((c) => c.status === "available");
-    if (avail.length) {
+    if (avail.length && !o.personal_mug && !o.test_device) {
       const sel = h("select", { style: "width:auto;min-height:36px;padding:6px 10px" }, [h("option", { value: "" }, "Choisir…")].concat(avail.map((c) => h("option", { value: String(c.number) }, "n° " + c.number))));
       sel.addEventListener("change", () => { if (sel.value) run(null, async () => { await staffAssignCup(o.id, Number(sel.value)); }, "Tasse attribuée"); });
       sel.title = "Choisir un numéro de tasse précis";
@@ -128,29 +133,40 @@ function staffOrderCard(o) {
     actions.appendChild(mk("", "↩ Remettre en nouvelle", (b) => run(b, () => staffSetStatus(o.id, "NOUVELLE"))));
   }
 
+  actions.appendChild(mk("bad", "🗑 Supprimer", async (b) => {
+    const ok = await confirmDialog("Supprimer cette commande ?",
+      o.test_device ? "Cette commande de test sera effacée." : `La commande de ${o.user_name} sera définitivement effacée${o.status !== "ANNULÉE" && o.total_cents > 0 ? " et le client sera remboursé de " + money(o.total_cents) : ""}. À utiliser pour une commande de test ou en double.`,
+      "Supprimer", "Retour", true);
+    if (ok) run(b, () => staffDeleteOrder(o.id), "Commande supprimée");
+  }));
+  const mugBox = o.status === "ANNULÉE" ? null : h("label", { class: "row small", style: "margin:8px 0 0;color:var(--text);cursor:pointer" }, [
+    h("input", { type: "checkbox", checked: !!o.personal_mug, onChange: (e) => run(null, () => staffSetPersonalMug(o.id, e.target.checked), e.target.checked ? "Tasse personnelle" : "Tasse du café") }),
+    "☕ Tasse personnelle du client (pas de tasse du café, pas de rappel de retour)"]);
+
   return h("div", { class: "order" }, [
     h("div", { class: "orderHead" }, [
       avatar(o.user_name, photo, 56, !photo),
       h("div", { class: "who" }, [
         h("b", {}, o.user_name),
-        h("div", { class: "small" }, [`${fmtTime(o.created_at_ms)}${dateKey(o.created_at_ms) !== State.staffDate ? " · " + fmtDate(o.created_at_ms) : ""} · `, h("b", {}, o.mode === "pickup" ? "Ramassage" : "📍 " + o.location)]),
+        h("div", { class: "small" }, [`${fmtTime(o.created_at_ms)}${dateKey(o.created_at_ms) !== State.staffDate ? " · " + fmtDate(o.created_at_ms) : ""} · `, h("b", {}, o.mode === "pickup" ? "Ramassage" + (State.settings.pickup_local ? " · local " + State.settings.pickup_local : "") : "📍 " + o.location)]),
         h("div", { class: "small muted" }, `Total ${money(o.total_cents)}${o.free_item ? " · 🎁 gratuite" : ""}`),
       ]),
       h("span", { class: "status " + o.status }, o.status),
     ]),
     h("div", {}, groupItems(o.items).map(({ it, count }) => staffItemRow(it, count))),
     o.comment ? h("div", { class: "banner", style: "margin:8px 0 0" }, "💬 " + o.comment) : null,
-    nDrinks > 1 || cups.length ? h("div", { class: "small", style: "margin-top:8px;font-weight:700;color:" + (o.status === "NOUVELLE" && missing ? "var(--warn)" : "var(--muted)") }, `Tasses : ${cups.length} / ${nDrinks} boisson${nDrinks > 1 ? "s" : ""}`) : null,
+    o.personal_mug ? h("div", { class: "small", style: "margin-top:8px;font-weight:700" }, "☕ Tasse personnelle (pas de tasse du café)") : nDrinks > 1 || cups.length ? h("div", { class: "small", style: "margin-top:8px;font-weight:700;color:" + (o.status === "NOUVELLE" && missing ? "var(--warn)" : "var(--muted)") }, `Tasses : ${cups.length} / ${nDrinks} boisson${nDrinks > 1 ? "s" : ""}`) : null,
     cups.length ? h("div", { class: "cups" }, cupChips) : null,
     o.status === "COMPLÉTÉE" && o.mode === "deliver" ? h("div", { class: "small", style: "margin-top:8px;font-weight:700;color:" + (o.delivered_at ? "var(--good)" : "var(--warn)") },
       o.delivered_at ? "🛒 Livrée à " + fmtTime(new Date(o.delivered_at).getTime()) : "🛒 En attente de livraison") : null,
+    mugBox,
     actions,
   ]);
 }
 
 function staffItemRow(it, count) {
   const addons = [];
-  if (it.syrup) addons.push({ icon: it.syrup.icon, label: LEVELS_SHORT[it.syrup.level] || "", title: it.syrup.name });
+  if (it.syrup) addons.push({ icon: it.syrup.icon, label: LEVELS_SHORT[it.syrup.level] || "", title: it.syrup.name, color: LEVEL_COLORS[it.syrup.level] });
   ADDONS.forEach((a) => { if (it[a.key]) addons.push({ icon: a.icon, label: "×" + it[a.key], title: a.label }); });
   if (it.marshmallows) addons.push({ icon: "guimauves.jpg", label: "", title: "Guimauves" });
   if (it.dairy_free) addons.push({ emoji: "🌱", label: "sans lait", title: "Sans produits laitiers" });
@@ -159,7 +175,7 @@ function staffItemRow(it, count) {
     it.icon ? iconImg(it.icon, { class: "big", alt: it.name, onClick: () => openImage(it.icon, it.name) }) : null,
     h("div", { class: "desc" }, [
       h("b", {}, (count > 1 ? count + " × " : "") + it.name + (it.free ? " 🎁" : "")),
-      h("div", { class: "addons" }, addons.map((a) => h("button", { class: "addon", type: "button", title: a.title, onClick: () => openAddonBig(a) }, [
+      h("div", { class: "addons" }, addons.map((a) => h("button", { class: "addon", type: "button", title: a.title, style: a.color ? "border:3px solid " + a.color : "", onClick: () => openAddonBig(a) }, [
         a.icon ? h("img", { src: iconUrl(a.icon), alt: a.title }) : h("span", { style: "padding-left:6px" }, a.emoji), a.label || a.title]))),
     ]),
   ]);
@@ -168,10 +184,10 @@ function staffItemRow(it, count) {
 /** Agrandit un ajout (pictogramme + nom + quantité) quand le staff touche la pastille. */
 function openAddonBig(a) {
   openSheet(a.title, h("div", { style: "text-align:center" }, [
-    a.icon ? h("img", { src: iconUrl(a.icon), alt: a.title, style: "width:min(260px,70vw);height:min(260px,70vw);object-fit:contain;border-radius:18px" })
+    a.icon ? h("img", { src: iconUrl(a.icon), alt: a.title, style: "width:min(260px,70vw);height:min(260px,70vw);object-fit:contain;border-radius:18px" + (a.color ? ";border:12px solid " + a.color + ";box-sizing:border-box" : "") })
            : h("div", { style: "font-size:7rem;line-height:1.3" }, a.emoji),
     h("h2", { style: "margin:10px 0 0" }, a.title),
-    a.label && a.label !== a.title ? h("p", { style: "font-size:1.5rem;font-weight:800;margin:6px 0 0" }, a.label) : null,
+    a.label && a.label !== a.title ? h("p", { style: "font-size:1.6rem;font-weight:800;margin:8px auto 0;display:inline-block;padding:4px 18px;border-radius:999px" + (a.color ? ";background:" + a.color + ";color:#fff" : "") }, a.label) : null,
   ]));
 }
 
@@ -244,6 +260,7 @@ function clientRows(shown, total) {
 }
 
 function openTopup(u) {
+  if (testId()) return toast("Recharger un portefeuille est désactivé en mode test.", "bad");
   let sign = 1;
   const amount = h("input", { type: "number", inputmode: "decimal", step: "0.25", min: "0", placeholder: "Montant ($)", style: "font-size:1.4rem;font-weight:800" });
   const note = h("input", { placeholder: "Note (optionnel) — ex : argent comptant" });
@@ -594,5 +611,15 @@ function renderStaffSettings() {
       catch (e) { toast(errText(e, "Modification impossible."), "bad"); }
     } }, "Changer le mot de passe")),
   ]);
-  return staffShell("staff_settings", [content, passCard]);
+  const mugInput = h("input", { type: "number", min: "0", max: "720", step: "1", value: String(s.mug_reminder_hours != null ? s.mug_reminder_hours : 48), style: "max-width:110px" });
+  const mugCard = h("div", { class: "card" }, [
+    h("h2", {}, "Retour des tasses"),
+    h("label", { style: "margin-top:0" }, "Rappel de retour de tasse après (heures) — 0 pour désactiver"),
+    h("div", { class: "row" }, [mugInput, h("button", { class: "btn sm good", type: "button", onClick: async () => {
+      try { await staffSaveSetting("mug_reminder_hours", Math.max(0, Math.round(parseFloat(mugInput.value) || 0))); await loadSettings(); toast("Rappel enregistré ✅", "good"); render(); } catch (e) { toast(errText(e), "bad"); }
+    } }, "Enregistrer")]),
+    h("p", { class: "muted small" }, "Le client reçoit une notification si sa tasse n'est pas revenue après ce délai (une seule fois par commande, vérifié chaque matin). Pour un client qui apporte sa propre tasse, coche « Tasse personnelle » sur sa commande : aucun rappel."),
+  ]);
+  const testCard = h("div", { class: "card" }, [h("h2", {}, "🧪 Mode test (cet appareil)"), testToggleBlock("test")]);
+  return staffShell("staff_settings", [content, mugCard, testCard, passCard]);
 }
