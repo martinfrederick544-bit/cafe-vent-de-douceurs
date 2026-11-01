@@ -145,7 +145,7 @@ function staffOrderCard(o) {
 
   return h("div", { class: "order" }, [
     h("div", { class: "orderHead" }, [
-      avatar(o.user_name, photo, 56, !photo),
+      avatar(o.user_name, photo, 56, !photo, true),
       h("div", { class: "who" }, [
         h("b", {}, o.user_name),
         h("div", { class: "small" }, [`${fmtTime(o.created_at_ms)}${dateKey(o.created_at_ms) !== State.staffDate ? " · " + fmtDate(o.created_at_ms) : ""} · `, h("b", {}, o.mode === "pickup" ? "Ramassage" + (State.settings.pickup_local ? " · local " + State.settings.pickup_local : "") : "📍 " + o.location)]),
@@ -245,7 +245,7 @@ function rerenderClientsList() {
 function clientRows(shown, total) {
   const low = (State.settings || {}).low_balance_cents || 0;
   const rows = shown.map((u) => h("div", { class: "userRow" }, [
-    avatar(u.name, State.photoCache[u.id], 48, !u.has_photo),
+    avatar(u.name, State.photoCache[u.id], 48, !u.has_photo, true),
     h("div", { class: "meta" }, [h("b", {}, u.name), h("small", {}, `${u.location || "—"} · ${u.email || ""}`)]),
     h("span", { class: "pill " + (u.balance_cents < low ? "warn" : "good") }, [h("b", {}, money(u.balance_cents))]),
     h("div", { class: "row", style: "gap:6px" }, [

@@ -209,8 +209,16 @@ function downloadText(filename, text, mime) {
 }
 
 /** Avatar rond : photo si dispo, sinon initiales. */
-function avatar(name, photo, size, warn) {
+/** Agrandit la photo d'un client (touche la photo). */
+function zoomPhoto(name, photo) {
+  openSheet(name || "", h("div", { style: "text-align:center" }, h("img", { src: photo, alt: name || "", style: "width:min(340px,86vw);height:min(340px,86vw);object-fit:cover;border-radius:24px" })));
+}
+function avatar(name, photo, size, warn, zoom) {
   const px = (size || 44) + "px";
+  if (zoom && photo) {
+    const img = h("img", { class: "avatar", src: photo, alt: name || "", title: "Agrandir", style: `width:${px};height:${px};cursor:zoom-in`, onClick: (e) => { e.stopPropagation(); zoomPhoto(name, photo); } });
+    return img;
+  }
   const el = photo
     ? h("img", { class: "avatar", src: photo, alt: name || "", style: `width:${px};height:${px}` })
     : h("div", { class: "avatar ph" + (warn ? " warn" : ""), style: `width:${px};height:${px};font-size:${Math.round((size || 44) / 2.6)}px`, title: warn ? "Photo manquante" : "" }, initials(name));
