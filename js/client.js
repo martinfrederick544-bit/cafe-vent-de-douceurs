@@ -27,26 +27,36 @@ function syrupPreview(sy, list) {
 }
 
 /* ---------- mode test (cet appareil seulement) ---------- */
+/** Recharge tout ce que le mode test peut changer (après activation, effacement ou sortie). */
+async function reloadAfterTest() {
+  const staff = State.profile && State.profile.is_staff;
+  try {
+    await loadSettings();
+    await Promise.all([loadProfile(), loadMyOrders(), loadMyTx(), loadLoyalty(),
+      staff ? loadStaffOrders() : null, staff ? loadCups() : null, staff ? loadUsers() : null, staff ? loadDelivery().catch(() => {}) : null]);
+  } catch (e) { console.warn(e); }
+}
 async function setTestMode(on) {
   const id = testId();
   try {
     if (!on && id) await testClear(id).catch((e) => console.warn(e));
+    TestOv.clear();
+    StaffUI.menuDraft = null; StaffUI.report = null; StaffUI.reportTried = false;
     if (on) localStorage.setItem("vd_test_id", "t" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36));
     else localStorage.removeItem("vd_test_id");
   } catch (_e) {}
-  const staff = State.profile && State.profile.is_staff;
-  try { await Promise.all([loadMyOrders(), loadLoyalty(), staff ? loadStaffOrders() : null, staff ? loadDelivery().catch(() => {}) : null]); } catch (e) { console.warn(e); }
-  toast(on ? "Mode test activé sur cet appareil 🧪" : "Mode test quitté, essais effacés", "good");
+  await reloadAfterTest();
+  toast(on ? "Mode test activé sur cet appareil 🧪" : "Mode test quitté : tout ce que tu avais fait en test est effacé", "good");
   render();
 }
 function testBanner() {
   if (!testId()) return null;
   return h("div", { class: "banner testBanner" }, [
     h("b", {}, "🧪 MODE TEST — sur cet appareil seulement. "),
-    "Rien n'est réel : aucun argent débité, rien dans les rapports, personne n'est notifié.",
+    "Tu peux tout essayer : commandes, recharges, modifications… Rien n'est réel et tout est effacé quand tu quittes le mode test.",
     h("div", { class: "row", style: "margin-top:8px" }, [
       h("button", { class: "btn sm", type: "button", onClick: async () => {
-        try { const n = await testClear(testId()); await Promise.all([loadMyOrders(), State.profile && State.profile.is_staff ? loadStaffOrders() : null, State.profile && State.profile.is_staff ? loadDelivery().catch(() => {}) : null]); toast(n ? n + " commande(s) de test effacée(s)" : "Rien à effacer", "good"); render(); }
+        try { await testClear(testId()); TestOv.clear(); StaffUI.menuDraft = null; await reloadAfterTest(); toast("Essais effacés : tout est revenu comme avant 🧹", "good"); render(); }
         catch (e) { toast(errText(e), "bad"); }
       } }, "🧹 Effacer mes tests"),
       h("button", { class: "btn sm bad", type: "button", onClick: () => setTestMode(false) }, "Quitter le mode test"),
@@ -56,7 +66,7 @@ function testBanner() {
 function testToggleBlock(label) {
   const on = !!testId();
   return h("div", {}, [
-    h("p", { class: "muted small" }, "Pour essayer l'app ou former quelqu'un sans rien de réel : ce que tu fais en mode " + label + " ne débite aucun portefeuille, ne compte dans aucun rapport et n'avertit personne. Actif seulement sur cet appareil, et n'affecte aucune autre personne ni commande."),
+    h("p", { class: "muted small" }, "Pour essayer l'app ou former quelqu'un sans rien de réel : en mode " + label + ", tu peux TOUT faire (commandes, recharges, changements de menu, de profil, de tasses…). Rien n'est enregistré pour de vrai, personne n'est notifié, et tout est effacé quand tu quittes le mode. Actif seulement sur cet appareil : aucune autre personne ni commande n'est touchée."),
     h("button", { class: "btn block" + (on ? " bad" : ""), type: "button", onClick: () => setTestMode(!on) }, on ? "Quitter le mode " + label + " (efface mes essais)" : "🧪 Activer le mode " + label),
   ]);
 }

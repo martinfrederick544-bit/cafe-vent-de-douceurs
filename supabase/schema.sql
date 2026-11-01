@@ -93,6 +93,8 @@ alter table public.vd_orders   add column if not exists mug_reminded_at timestam
 alter table public.vd_settings add column if not exists pickup_local text not null default '';        -- local de ramassage du jour (changé par le staff)
 alter table public.vd_settings add column if not exists mug_reminder_hours int not null default 48;   -- rappel de retour de tasse (0 = désactivé)
 create index if not exists vd_orders_test_idx on public.vd_orders(test_device) where test_device is not null;
+alter table public.vd_wallet_tx add column if not exists test_device text;   -- mouvement de portefeuille « de test » (n'affecte jamais le vrai solde)
+create index if not exists vd_wallet_tx_test_idx on public.vd_wallet_tx(test_device) where test_device is not null;
 
 -- Configuration interne (URL + secret du service de notifications) — jamais lisible côté navigateur
 create table if not exists public.vd_config (
@@ -265,9 +267,10 @@ $$;
 --    Une entrée = une tasse.
 -- ---------------------------------------------------------------------
 drop function if exists public.vd_place_order(text, jsonb, text, text, text, boolean);
+drop function if exists public.vd_place_order(text, jsonb, text, text, text, boolean, text);
 create or replace function public.vd_place_order(
   p_id text, p_items jsonb, p_location text, p_comment text,
-  p_mode text default 'deliver', p_use_free boolean default false, p_test text default null
+  p_mode text default 'deliver', p_use_free boolean default false, p_test text default null, p_menu jsonb default null
 ) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
@@ -294,6 +297,7 @@ declare
   v_ex       jsonb;
   v_exclean  jsonb;
   v_test     text;
+  v_tbal     int := 0;
 begin
   if v_uid is null then raise exception 'NOT_AUTHENTICATED'; end if;
 
@@ -304,8 +308,12 @@ begin
   -- mode test (appareil) : la commande est marquée, ne débite rien, ne compte nulle part et ne notifie personne
   v_test := nullif(trim(coalesce(p_test, '')), '');
   if v_test is not null and v_test !~ '^[A-Za-z0-9_-]{4,40}$' then raise exception 'BAD_ID'; end if;
-  if v_test is not null then delete from public.vd_orders where test_device is not null and created_at < now() - interval '3 days'; end if;
-  if v_set.require_photo and coalesce(v_prof.photo, '') = '' then raise exception 'PHOTO_REQUIRED'; end if;
+  if v_test is not null then
+    delete from public.vd_orders where test_device is not null and created_at < now() - interval '3 days';
+    delete from public.vd_wallet_tx where test_device is not null and created_at < now() - interval '3 days';
+    select coalesce(sum(amount_cents), 0) into v_tbal from public.vd_wallet_tx where user_id = v_uid and test_device = v_test;
+  end if;
+  if v_test is null and v_set.require_photo and coalesce(v_prof.photo, '') = '' then raise exception 'PHOTO_REQUIRED'; end if;
   if coalesce(trim(p_location), '') = '' then raise exception 'LOCATION_REQUIRED'; end if;
   if p_id is null or p_id !~ '^[A-Za-z0-9_-]{1,64}$' then raise exception 'BAD_ID'; end if;
   if p_mode not in ('deliver','pickup') then p_mode := 'deliver'; end if;
@@ -314,7 +322,8 @@ begin
     raise exception 'BAD_ITEMS';
   end if;
 
-  v_menu := v_set.menu;
+  -- en mode test, le client peut fournir son menu d'essai (produits modifiés pour la formation) ; jamais utilisé hors test
+  v_menu := case when v_test is not null and jsonb_typeof(p_menu) = 'object' and length(p_menu::text) < 600000 then p_menu else v_set.menu end;
   v_surcharge := coalesce((v_menu->>'syrupSurchargeCents')::int, 50);
 
   for v_it in select * from jsonb_array_elements(p_items) loop
@@ -383,7 +392,8 @@ begin
 
   select coalesce(sum((it->>'price_cents')::int), 0) into v_total from jsonb_array_elements(v_clean) it;
 
-  v_new_bal := v_prof.balance_cents - v_total;
+  v_new_bal := (case when v_test is null then v_prof.balance_cents else v_prof.balance_cents + v_tbal end) - v_total;
+  -- en mode test : pas de plafond (le solde d'essai peut descendre sous 0)
   if v_test is null and v_new_bal < -v_set.credit_limit_cents then raise exception 'CREDIT_LIMIT_REACHED'; end if;
 
   insert into public.vd_orders
@@ -396,9 +406,12 @@ begin
     update public.vd_profiles set balance_cents = v_new_bal where id = v_uid;
     insert into public.vd_wallet_tx (user_id, kind, amount_cents, balance_after, order_id, note)
     values (v_uid, 'order', -v_total, v_new_bal, p_id, 'Commande');
+  elsif v_total > 0 then
+    insert into public.vd_wallet_tx (user_id, kind, amount_cents, balance_after, order_id, note, test_device)
+    values (v_uid, 'order', -v_total, v_new_bal, p_id, '🧪 Commande (test)', v_test);
   end if;
 
-  return jsonb_build_object('id', p_id, 'total_cents', v_total, 'balance_cents', case when v_test is null then v_new_bal else v_prof.balance_cents end, 'free_item', v_free);
+  return jsonb_build_object('id', p_id, 'total_cents', v_total, 'balance_cents', v_new_bal, 'free_item', v_free);
 end;
 $$;
 
@@ -425,6 +438,12 @@ begin
        where id = v_o.user_id returning balance_cents into v_bal;
       insert into public.vd_wallet_tx (user_id, kind, amount_cents, balance_after, order_id, note, created_by)
       values (v_o.user_id, 'refund', v_o.total_cents, v_bal, v_o.id, 'Commande annulée', auth.uid());
+    elsif v_o.total_cents > 0 and v_o.user_id is not null then
+      insert into public.vd_wallet_tx (user_id, kind, amount_cents, balance_after, order_id, note, created_by, test_device)
+      values (v_o.user_id, 'refund', v_o.total_cents,
+              coalesce((select balance_cents from public.vd_profiles where id = v_o.user_id), 0)
+                + coalesce((select sum(amount_cents) from public.vd_wallet_tx where user_id = v_o.user_id and test_device = v_o.test_device), 0) + v_o.total_cents,
+              v_o.id, '🧪 Commande annulée (test)', auth.uid(), v_o.test_device);
     end if;
     update public.vd_cups set status = 'available', order_id = null, updated_at = now() where order_id = v_o.id;
   end if;
@@ -513,13 +532,26 @@ end;
 $$;
 
 -- Recharge manuelle du portefeuille (p_amount_cents > 0) ou correction (< 0)
-create or replace function public.vd_staff_topup(p_user uuid, p_amount_cents int, p_note text default null)
+drop function if exists public.vd_staff_topup(uuid, int, text, text);
+create or replace function public.vd_staff_topup(p_user uuid, p_amount_cents int, p_note text default null, p_test text default null)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_bal int;
 begin
   perform public.vd_require_staff();
   if p_amount_cents is null or p_amount_cents = 0 or abs(p_amount_cents) > 100000 then raise exception 'BAD_AMOUNT'; end if;
+
+  if nullif(trim(coalesce(p_test, '')), '') is not null then
+    -- mode test : mouvement « fantôme », le vrai solde n'est jamais modifié
+    if p_test !~ '^[A-Za-z0-9_-]{4,40}$' then raise exception 'BAD_ID'; end if;
+    select balance_cents into v_bal from public.vd_profiles where id = p_user;
+    if v_bal is null then raise exception 'USER_NOT_FOUND'; end if;
+    v_bal := v_bal + coalesce((select sum(amount_cents) from public.vd_wallet_tx where user_id = p_user and test_device = p_test), 0) + p_amount_cents;
+    insert into public.vd_wallet_tx (user_id, kind, amount_cents, balance_after, note, created_by, test_device)
+    values (p_user, case when p_amount_cents > 0 then 'topup' else 'adjust' end, p_amount_cents, v_bal,
+            '🧪 ' || coalesce(nullif(left(trim(coalesce(p_note, '')), 200), ''), 'test'), auth.uid(), p_test);
+    return jsonb_build_object('balance_cents', v_bal);
+  end if;
 
   update public.vd_profiles set balance_cents = balance_cents + p_amount_cents
    where id = p_user returning balance_cents into v_bal;
@@ -590,7 +622,7 @@ begin
   ), tx_r as (
     select (t.created_at at time zone 'America/Toronto')::date as d, t.kind, t.amount_cents
       from public.vd_wallet_tx t
-     where (t.created_at at time zone 'America/Toronto')::date between p_from and p_to
+     where t.test_device is null and (t.created_at at time zone 'America/Toronto')::date between p_from and p_to
   ), od as (
     select d, count(*) as orders, sum(nb) as drinks, sum(total_cents) as sales from ord_r group by d
   ), td as (
@@ -877,11 +909,11 @@ alter default privileges in schema public revoke execute on functions from publi
 grant execute on function
   public.vd_is_staff(), public.vd_my_loyalty(),
   public.vd_update_my_profile(text, text), public.vd_set_my_photo(text),
-  public.vd_place_order(text, jsonb, text, text, text, boolean, text),
+  public.vd_place_order(text, jsonb, text, text, text, boolean, text, jsonb),
   public.vd_staff_set_status(text, text), public.vd_staff_assign_cup(text, int),
   public.vd_staff_assign_cups(text, int),
   public.vd_staff_return_cup(int), public.vd_staff_set_cup_count(int),
-  public.vd_staff_topup(uuid, int, text), public.vd_staff_set_photo(uuid, text),
+  public.vd_staff_topup(uuid, int, text, text), public.vd_staff_set_photo(uuid, text),
   public.vd_staff_update_user(uuid, text, text), public.vd_staff_save_setting(text, jsonb),
   public.vd_staff_report(date, date), public.vd_save_push(text, text, text, text),
   public.vd_unsave_push(text), public.vd_help_check()
@@ -995,6 +1027,7 @@ begin
     values (v_o.user_id, 'refund', v_o.total_cents, v_bal, v_o.id, 'Commande supprimée', auth.uid());
   end if;
   update public.vd_cups set status = 'available', order_id = null, updated_at = now() where order_id = v_o.id;
+  if v_o.test_device is not null then delete from public.vd_wallet_tx where order_id = v_o.id and test_device is not null; end if;
   delete from public.vd_orders where id = p_order_id;
 end;
 $$;
@@ -1007,6 +1040,7 @@ declare
 begin
   if auth.uid() is null then raise exception 'NOT_AUTHENTICATED'; end if;
   if p_test is null or p_test !~ '^[A-Za-z0-9_-]{4,40}$' then raise exception 'BAD_ID'; end if;
+  delete from public.vd_wallet_tx where test_device = p_test and (user_id = auth.uid() or public.vd_is_staff());
   delete from public.vd_orders where test_device = p_test and (user_id = auth.uid() or public.vd_is_staff());
   get diagnostics v_n = row_count;
   return v_n;

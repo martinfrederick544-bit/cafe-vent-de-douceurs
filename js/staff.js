@@ -260,7 +260,6 @@ function clientRows(shown, total) {
 }
 
 function openTopup(u) {
-  if (testId()) return toast("Recharger un portefeuille est désactivé en mode test.", "bad");
   let sign = 1;
   const amount = h("input", { type: "number", inputmode: "decimal", step: "0.25", min: "0", placeholder: "Montant ($)", style: "font-size:1.4rem;font-weight:800" });
   const note = h("input", { placeholder: "Note (optionnel) — ex : argent comptant" });
@@ -382,7 +381,7 @@ async function uploadMenuImage(file, key) {
 function imagePicker(obj, keyBase, small) {
   const file = h("input", { type: "file", accept: "image/*", style: "display:none", onChange: async (e) => {
     const f = e.target.files && e.target.files[0]; if (!f) return;
-    try { toast("Téléversement de l'image…"); obj.icon = await uploadMenuImage(f, keyBase); toast("Image ajoutée ✅ (pense à enregistrer le menu)", "good"); render(); }
+    try { toast("Téléversement de l'image…"); obj.icon = testId() ? await resizeImageToDataUrl(f, 512, 0.85) : await uploadMenuImage(f, keyBase); toast("Image ajoutée ✅ (pense à enregistrer le menu)", "good"); render(); }
     catch (er) { console.warn(er); toast("Impossible de téléverser l'image : " + ((er && er.message) || "erreur"), "bad"); }
   } });
   const btn = h("button", { class: "prodPic" + (small ? " sm" : ""), type: "button", title: "Changer l'image", onClick: () => file.click() },

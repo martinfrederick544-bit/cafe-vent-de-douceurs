@@ -62,7 +62,7 @@ function newOrderId() { return "ord_" + Date.now() + "_" + Math.random().toStrin
 
 function iconUrl(file) {
   if (!file) return "";
-  if (file.indexOf("https://") === 0) return file;   // image téléversée par le staff (Supabase Storage)
+  if (file.indexOf("https://") === 0 || file.indexOf("data:image/") === 0) return file;   // image téléversée par le staff (Supabase Storage)
   return VD.ICON_OVERRIDES[file] || (VD.ICON_BASE + file);
 }
 

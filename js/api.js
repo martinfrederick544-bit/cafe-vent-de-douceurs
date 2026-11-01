@@ -28,6 +28,30 @@ const State = {
 
 function unwrap(res) { if (res.error) throw res.error; return res.data; }
 
+/* ---------- mode test : modifications « fantômes » ----------
+   En mode test (par appareil), les changements de réglages, menu, profils, photos et tasses ne sont JAMAIS enregistrés :
+   ils restent dans cet appareil (localStorage) et disparaissent en quittant le mode test. */
+const TestOv = {
+  empty() { return { settings: {}, me: {}, users: {}, cups: {} }; },
+  get() { try { const o = JSON.parse(localStorage.getItem("vd_test_ov") || "{}"); return Object.assign(this.empty(), o); } catch (_e) { return this.empty(); } },
+  save(o) { try { localStorage.setItem("vd_test_ov", JSON.stringify(o)); } catch (_e) { toast("Mémoire de l'appareil pleine : cet essai ne sera pas conservé.", "bad"); } },
+  edit(fn) { const o = this.get(); fn(o); this.save(o); },
+  clear() { try { localStorage.removeItem("vd_test_ov"); } catch (_e) {} },
+};
+/** Somme des mouvements de portefeuille de test de cet appareil : { userId: cents } (le staff voit tous les clients, un client voit le sien). */
+async function testTxSums() {
+  const id = testId(); if (!id) return {};
+  const rows = unwrap(await sb.from("vd_wallet_tx").select("user_id,amount_cents").eq("test_device", id).limit(5000)) || [];
+  const m = {}; rows.forEach((r) => { m[r.user_id] = (m[r.user_id] || 0) + r.amount_cents; });
+  return m;
+}
+function applyPhotoOverlay() {
+  if (!testId()) return;
+  const ov = TestOv.get();
+  Object.keys(ov.users).forEach((id) => { if (ov.users[id].photo) State.photoCache[id] = ov.users[id].photo; });
+  if (State.profile && ov.me.photo) State.photoCache[State.profile.id] = ov.me.photo;
+}
+
 /* ---------- session / profil ---------- */
 async function loadProfile() {
   if (!State.session) { State.profile = null; return null; }
@@ -35,11 +59,17 @@ async function loadProfile() {
     .select("id,email,name,location,photo,is_staff,is_delivery,balance_cents")
     .eq("id", State.session.user.id).maybeSingle());
   State.profile = data || null;
-  if (data && data.photo) State.photoCache[data.id] = data.photo;
+  if (data && testId()) {
+    const ov = TestOv.get(), sums = await testTxSums();
+    Object.assign(State.profile, ov.me);
+    State.profile.balance_cents += sums[data.id] || 0;
+  }
+  if (State.profile && State.profile.photo) State.photoCache[State.profile.id] = State.profile.photo;
   return State.profile;
 }
 async function loadSettings() {
   State.settings = unwrap(await sb.from("vd_settings").select("*").eq("id", 1).maybeSingle());
+  if (State.settings && testId()) State.settings = Object.assign({}, State.settings, TestOv.get().settings);
   return State.settings;
 }
 
@@ -51,8 +81,9 @@ async function loadMyOrders() {
 }
 async function loadMyTx() {
   if (!State.session) return;
-  State.myTx = unwrap(await sb.from("vd_wallet_tx").select("*")
-    .eq("user_id", State.session.user.id).order("created_at", { ascending: false }).limit(25)) || [];
+  let q = sb.from("vd_wallet_tx").select("*").eq("user_id", State.session.user.id);
+  q = testId() ? q.or("test_device.is.null,test_device.eq." + testId()) : q.is("test_device", null);
+  State.myTx = unwrap(await q.order("created_at", { ascending: false }).limit(25)) || [];
 }
 async function loadLoyalty() {
   const d = unwrap(await sb.rpc("vd_my_loyalty"));
@@ -66,12 +97,12 @@ async function loadClientData() {
 }
 async function placeOrder(id, items, location, comment, mode, useFree) {
   const d = unwrap(await sb.rpc("vd_place_order", {
-    p_id: id, p_items: items, p_location: location, p_comment: comment || "", p_mode: mode, p_use_free: !!useFree, p_test: testId() || null,
+    p_id: id, p_items: items, p_location: location, p_comment: comment || "", p_mode: mode, p_use_free: !!useFree, p_test: testId() || null, p_menu: testId() ? menu() : null,
   }));
   return d;
 }
-async function updateMyProfile(name, location) { unwrap(await sb.rpc("vd_update_my_profile", { p_name: name, p_location: location })); }
-async function setMyPhoto(dataUrl) { unwrap(await sb.rpc("vd_set_my_photo", { p_photo: dataUrl })); }
+async function updateMyProfile(name, location) { if (testId()) { TestOv.edit((o) => { o.me.name = name; o.me.location = location; }); return; } unwrap(await sb.rpc("vd_update_my_profile", { p_name: name, p_location: location })); }
+async function setMyPhoto(dataUrl) { if (testId()) { TestOv.edit((o) => { o.me.photo = dataUrl; }); return; } unwrap(await sb.rpc("vd_set_my_photo", { p_photo: dataUrl })); }
 
 /* ---------- staff ---------- */
 async function loadStaffOrders() {
@@ -85,12 +116,28 @@ async function loadStaffOrders() {
   State.staffOrders = rows;
   await ensurePhotos(rows.map((o) => o.user_id));
 }
-async function loadCups() { State.cups = unwrap(await sb.from("vd_cups").select("*").order("number")) || []; }
+async function loadCups() {
+  let c = unwrap(await sb.from("vd_cups").select("*").order("number")) || [];
+  if (testId()) {   // mode test : tasses « fantômes » (retours, nombre total) appliquées par-dessus les vraies
+    const ov = TestOv.get(), n = ov.settings.cup_count;
+    c = c.map((x) => (ov.cups[x.number] ? Object.assign({}, x, { status: ov.cups[x.number], order_id: ov.cups[x.number] === "available" ? null : x.order_id }) : x));
+    if (n) { c = c.filter((x) => x.number <= n); for (let i = c.length + 1; i <= n; i++) c.push({ number: i, status: "available", order_id: null }); }
+  }
+  State.cups = c;
+}
 async function loadUsers() {
   State.users = unwrap(await sb.from("vd_profiles")
     .select("id,email,name,location,balance_cents,has_photo,is_staff").eq("is_staff", false).eq("is_delivery", false).order("name").limit(1000)) || [];
+  if (testId()) {
+    const ov = TestOv.get(), sums = await testTxSums();
+    State.users = State.users.map((u) => {
+      const o = ov.users[u.id] || {};
+      return Object.assign({}, u, { balance_cents: u.balance_cents + (sums[u.id] || 0) }, o.name !== undefined ? { name: o.name } : {}, o.location !== undefined ? { location: o.location } : {}, o.photo ? { has_photo: true } : {});
+    });
+  }
 }
-async function ensurePhotos(ids) {
+async function ensurePhotos(ids) { const n = await _ensurePhotosReal(ids); applyPhotoOverlay(); return n; }
+async function _ensurePhotosReal(ids) {
   const need = [...new Set(ids.filter((id) => id && !(id in State.photoCache)))];
   if (!need.length) return 0;
   for (let i = 0; i < need.length; i += 40) {
@@ -110,18 +157,23 @@ async function staffDeleteOrder(orderId) { unwrap(await sb.rpc("vd_staff_delete_
 async function staffSetPersonalMug(orderId, v) { unwrap(await sb.rpc("vd_staff_set_personal_mug", { p_order_id: orderId, p_value: !!v })); }
 async function testClear(id) { return unwrap(await sb.rpc("vd_test_clear", { p_test: id })); }
 async function deliveryMark(orderId, delivered) { unwrap(await sb.rpc("vd_delivery_mark", { p_order_id: orderId, p_delivered: delivered !== false })); }
-async function staffReturnCup(cup) { unwrap(await sb.rpc("vd_staff_return_cup", { p_cup: cup })); }
-async function staffSetCupCount(n) { unwrap(await sb.rpc("vd_staff_set_cup_count", { p_count: n })); }
-async function staffTopup(userId, cents, note) { return unwrap(await sb.rpc("vd_staff_topup", { p_user: userId, p_amount_cents: cents, p_note: note || null })); }
-async function staffSetPhoto(userId, dataUrl) { unwrap(await sb.rpc("vd_staff_set_photo", { p_user: userId, p_photo: dataUrl })); State.photoCache[userId] = dataUrl; }
-async function staffUpdateUser(userId, name, location) { unwrap(await sb.rpc("vd_staff_update_user", { p_user: userId, p_name: name, p_location: location })); }
-async function staffSaveSetting(key, value) { unwrap(await sb.rpc("vd_staff_save_setting", { p_key: key, p_value: value })); }
+async function staffReturnCup(cup) { if (testId()) { TestOv.edit((o) => { o.cups[cup] = "available"; }); return; } unwrap(await sb.rpc("vd_staff_return_cup", { p_cup: cup })); }
+async function staffSetCupCount(n) { if (testId()) { TestOv.edit((o) => { o.settings.cup_count = n; }); return; } unwrap(await sb.rpc("vd_staff_set_cup_count", { p_count: n })); }
+async function staffTopup(userId, cents, note) { return unwrap(await sb.rpc("vd_staff_topup", { p_user: userId, p_amount_cents: cents, p_note: note || null, p_test: testId() || null })); }
+async function staffSetPhoto(userId, dataUrl) {
+  if (testId()) { TestOv.edit((o) => { o.users[userId] = Object.assign({}, o.users[userId], { photo: dataUrl }); }); State.photoCache[userId] = dataUrl; return; }
+  unwrap(await sb.rpc("vd_staff_set_photo", { p_user: userId, p_photo: dataUrl })); State.photoCache[userId] = dataUrl;
+}
+async function staffUpdateUser(userId, name, location) { if (testId()) { TestOv.edit((o) => { o.users[userId] = Object.assign({}, o.users[userId], { name: String(name).trim(), location: String(location).trim() }); }); return; } unwrap(await sb.rpc("vd_staff_update_user", { p_user: userId, p_name: name, p_location: location })); }
+async function staffSaveSetting(key, value) { if (testId()) { TestOv.edit((o) => { o.settings[key] = value; }); return; } unwrap(await sb.rpc("vd_staff_save_setting", { p_key: key, p_value: value })); }
 async function staffReport(from, to) { return unwrap(await sb.rpc("vd_staff_report", { p_from: from, p_to: to })); }
 async function staffUserTx(userId, limit) {
-  return unwrap(await sb.from("vd_wallet_tx").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(limit || 40)) || [];
+  let q = sb.from("vd_wallet_tx").select("*").eq("user_id", userId);
+  q = testId() ? q.or("test_device.is.null,test_device.eq." + testId()) : q.is("test_device", null);
+  return unwrap(await q.order("created_at", { ascending: false }).limit(limit || 40)) || [];
 }
 async function staffTxBetween(fromIso, toIso) {
-  return unwrap(await sb.from("vd_wallet_tx").select("*").gte("created_at", fromIso).lt("created_at", toIso).order("created_at").limit(5000)) || [];
+  return unwrap(await sb.from("vd_wallet_tx").select("*").is("test_device", null).gte("created_at", fromIso).lt("created_at", toIso).order("created_at").limit(5000)) || [];
 }
 
 /* ---------- temps réel ---------- */
