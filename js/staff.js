@@ -269,6 +269,16 @@ function staffOrderCard(o) {
     h("input", { type: "checkbox", checked: !!o.personal_mug, onChange: (e) => run(null, () => staffSetPersonalMug(o.id, e.target.checked), e.target.checked ? "Tasse personnelle" : "Tasse du café") }),
     "☕ Tasse personnelle du client (pas de tasse du café, pas de rappel de retour)"]);
 
+  // photo, tasse (image + numéro), pictogramme livraison/ramassage, local en gros pour une livraison
+  const cupsNode = o.personal_mug
+    ? h("div", { class: "cups" }, h("span", { class: "cupBtn back" }, [cupImg("perso", 90), h("small", {}, "Tasse personnelle")]))
+    : (cups.length ? h("div", { class: "cups" }, cupChips) : null);
+  const deliverMode = o.mode === "deliver";
+  const modeRow = h("div", { class: "cardMode" }, [
+    h("img", { class: "cardPicto", src: deliverMode ? VD.PICTO_DELIVER : VD.PICTO_PICKUP, alt: deliverMode ? "Livraison" : "Ramassage" }),
+    deliverMode ? floorBlock(o.location, o.floor, "md") : h("div", { class: "cardModeText" }, ["Ramassage", State.settings.pickup_local ? h("div", { class: "muted small" }, "Local " + State.settings.pickup_local) : null]),
+  ]);
+
   return h("div", { class: "order" }, [
     h("div", { class: "orderHead" }, [
       avatar(o.user_name, photo, 56, !photo, true),
@@ -279,11 +289,10 @@ function staffOrderCard(o) {
       ]),
       h("span", { class: "status " + o.status }, o.status),
     ]),
-    o.mode === "deliver" ? floorBlock(o.location, o.floor, "sm") : null,
+    cupsNode,
+    modeRow,
     h("div", {}, groupItems(o.items).map(({ it, count }) => staffItemRow(it, count))),
     o.comment ? h("div", { class: "banner", style: "margin:8px 0 0" }, "💬 " + o.comment) : null,
-    o.personal_mug ? h("div", { class: "cups" }, h("span", { class: "cupBtn back" }, [cupImg("perso", 78), h("small", {}, "Tasse personnelle")])) : nDrinks > 1 || cups.length ? h("div", { class: "small", style: "margin-top:8px;font-weight:700;color:" + (o.status === "NOUVELLE" && missing ? "var(--warn)" : "var(--muted)") }, `Tasses : ${cups.length} / ${nDrinks} boisson${nDrinks > 1 ? "s" : ""}`) : null,
-    cups.length ? h("div", { class: "cups" }, cupChips) : null,
     o.status === "COMPLÉTÉE" && o.mode === "deliver" ? h("div", { class: "small", style: "margin-top:8px;font-weight:700;color:" + (o.delivered_at ? "var(--good)" : "var(--warn)") },
       o.delivered_at ? "🛒 Livrée à " + fmtTime(new Date(o.delivered_at).getTime()) : "🛒 En attente de livraison") : null,
     mugBox,

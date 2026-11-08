@@ -4,11 +4,22 @@
 
 /** Vue très grande pour reconnaître le client et la commande de loin. */
 function openDeliveryBig(o) {
+  const done = !!o.delivered_at;
+  const doneBtn = h("button", { class: "btn " + (done ? "" : "good ovBig"), type: "button", style: "margin-top:18px;width:100%" }, done ? "↩ Annuler « livré »" : "✔ Livré");
+  doneBtn.addEventListener("click", async () => {
+    doneBtn.disabled = true;
+    try {
+      await deliveryMark(o.id, !done);
+      closeSheet(); toast(done ? "Remise à livrer" : "Marquée livrée ✅", "good");
+      await loadDelivery(); render();
+    } catch (e) { toast(errText(e), "bad"); doneBtn.disabled = false; }
+  });
   openSheet(o.user_name, h("div", { style: "text-align:center" }, [
     o.photo ? h("img", { src: o.photo, alt: o.user_name, style: "width:min(280px,80vw);height:min(280px,80vw);object-fit:cover;border-radius:24px" }) : avatar(o.user_name, "", 160, true),
     h("h2", { style: "margin:12px 0 0;font-size:1.8rem" }, o.user_name),
     h("div", { style: "margin:12px 0" }, floorBlock(o.location, o.floor, "lg")),
     h("div", { style: "display:flex;gap:12px;flex-wrap:wrap;justify-content:center" }, o.personal_mug ? [cupImg("perso", 170)] : (o.cup_numbers || []).map((n) => cupImg(n, 170))),
+    doneBtn,
   ]));
 }
 

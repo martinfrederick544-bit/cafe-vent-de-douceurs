@@ -474,3 +474,10 @@ table.tbl { min-width: 0; font-size: .8rem; } table.tbl th, table.tbl td { paddi
 .crop > img.cropImg { position: absolute; max-width: none; height: auto; width: 144.1%; left: -23.35%; top: -3.4%; object-fit: fill; }
 .crop.v2 > img.cropImg { width: 111%; left: -5.46%; top: -21.84%; }
 .crop.bigDrink { width: 112px; height: 112px; aspect-ratio: 1; flex: none; border-radius: 18px; }
+
+/* ---- carte d'une commande complétée : pictogramme + local en gros ---- */
+.cardMode { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+.cardMode .floorBlock { flex: 1; margin: 0; min-width: 0; }
+.cardMode .floorBlock.md .fbLoc { font-size: 1.9rem; }
+.cardPicto { width: 84px; height: 84px; object-fit: contain; border-radius: 14px; background: #fff; flex: none; }
+.cardModeText { font-size: 1.5rem; font-weight: 900; }
