@@ -165,6 +165,7 @@ async function staffDeleteOrder(orderId) { unwrap(await sb.rpc("vd_staff_delete_
 async function staffSetPersonalMug(orderId, v) { unwrap(await sb.rpc("vd_staff_set_personal_mug", { p_order_id: orderId, p_value: !!v })); }
 async function testClear(id) { return unwrap(await sb.rpc("vd_test_clear", { p_test: id })); }
 async function deliveryMark(orderId, delivered) { unwrap(await sb.rpc("vd_delivery_mark", { p_order_id: orderId, p_delivered: delivered !== false })); }
+async function staffClearCups(orderId) { unwrap(await sb.rpc("vd_staff_clear_cups", { p_order_id: orderId })); }
 async function staffReturnCup(cup) { if (testId()) { TestOv.edit((o) => { o.cups[cup] = "available"; }); return; } unwrap(await sb.rpc("vd_staff_return_cup", { p_cup: cup })); }
 async function staffSetCupCount(n) { if (testId()) { TestOv.edit((o) => { o.settings.cup_count = n; }); return; } unwrap(await sb.rpc("vd_staff_set_cup_count", { p_count: n })); }
 async function staffTopup(userId, cents, note) { return unwrap(await sb.rpc("vd_staff_topup", { p_user: userId, p_amount_cents: cents, p_note: note || null, p_test: testId() || null })); }

@@ -155,9 +155,12 @@ function orderOverlay(o) {
   cupBlock.appendChild(h("div", { class: "ovTitle" }, "Tasse"));
   if (o.personal_mug) {
     cupBlock.appendChild(h("div", { class: "ovCupResult" }, [cupImg("perso", 150), h("b", {}, "Tasse personnelle")]));
-    cupBlock.appendChild(h("button", { class: "btn sm", type: "button", onClick: () => act(() => staffSetPersonalMug(o.id, false)) }, "↩ Changer"));
+    cupBlock.appendChild(h("button", { class: "btn sm", type: "button", onClick: () => act(() => staffSetPersonalMug(o.id, false)) }, "↩ Changer la tasse"));
   } else {
-    if (cups.length) cupBlock.appendChild(h("div", { class: "ovCupResult" }, cups.map((n) => cupImg(n, 150))));
+    if (cups.length) {
+      cupBlock.appendChild(h("div", { class: "ovCupResult" }, cups.map((n) => cupImg(n, 150))));
+      cupBlock.appendChild(h("button", { class: "btn sm", type: "button", style: "margin-bottom:10px", onClick: () => { StaffUI.cupPick = null; act(() => staffClearCups(o.id), "Tasse libérée : choisis-en une autre"); } }, "↩ Changer la tasse"));
+    }
     if (missing > 0) {
       if (nDrinks > 1) cupBlock.appendChild(h("p", { class: "muted", style: "margin:6px 0 10px" }, `Il manque ${missing} tasse${missing > 1 ? "s" : ""} (${nDrinks} boissons).`));
       cupBlock.appendChild(h("div", { class: "ovChoices" }, [

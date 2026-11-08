@@ -1071,8 +1071,25 @@ begin
   perform public.vd_require_staff();
   update public.vd_orders set personal_mug = coalesce(p_value, false) where id = p_order_id;
   if not found then raise exception 'ORDER_NOT_FOUND'; end if;
+  if coalesce(p_value, false) then   -- tasse personnelle : les tasses du café déjà attribuées sont libérées
+    update public.vd_cups set status = 'available', order_id = null, updated_at = now() where order_id = p_order_id;
+    update public.vd_orders set cup_numbers = '{}' where id = p_order_id;
+  end if;
 end;
 $$;
+
+-- Libère les tasses attribuées à une commande (le staff peut ainsi changer la tasse à tout moment)
+create or replace function public.vd_staff_clear_cups(p_order_id text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  perform public.vd_require_staff();
+  update public.vd_orders set cup_numbers = '{}' where id = p_order_id;
+  if not found then raise exception 'ORDER_NOT_FOUND'; end if;
+  update public.vd_cups set status = 'available', order_id = null, updated_at = now() where order_id = p_order_id;
+end;
+$$;
+revoke execute on function public.vd_staff_clear_cups(text) from public, anon, authenticated;
+grant execute on function public.vd_staff_clear_cups(text) to authenticated;
 
 -- Rappel de retour de tasse (appelée chaque jour par Vercel Cron avec le secret) : une notification par commande
 create or replace function public.vd_mug_reminders(p_secret text)
