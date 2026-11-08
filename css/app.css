@@ -445,3 +445,6 @@ table.tbl { min-width: 0; font-size: .8rem; } table.tbl th, table.tbl td { paddi
 .ovModeText b { font-size: 2.2rem; font-weight: 900; }
 .ovActions { margin-top: 28px; display: grid; gap: 14px; }
 .btn.ovBig { min-height: 84px; font-size: 1.9rem; width: 100%; }
+/* iPhone : le bandeau « Fermer » descend sous l'encoche / la barre d'état */
+.ovClose { padding-top: calc(env(safe-area-inset-top, 0px) + 22px); padding-bottom: 16px; }
+.ovBody { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 60px); }
