@@ -469,3 +469,8 @@ table.tbl { min-width: 0; font-size: .8rem; } table.tbl th, table.tbl td { paddi
 .cupTile.free .cupImg { opacity: .5; }
 .cupTile.use { border-width: 4px; }
 .cupImg { aspect-ratio: 1545 / 2000; object-fit: contain; }
+
+/* ---- images de cafés : recadrage (ancien format 1024×768 / nouveau format 1545×1999) ---- */
+.crop > img.cropImg { position: absolute; max-width: none; height: auto; width: 144.1%; left: -23.35%; top: -3.4%; object-fit: fill; }
+.crop.v2 > img.cropImg { width: 111%; left: -5.46%; top: -21.84%; }
+.crop.bigDrink { width: 112px; height: 112px; aspect-ratio: 1; flex: none; border-radius: 18px; }

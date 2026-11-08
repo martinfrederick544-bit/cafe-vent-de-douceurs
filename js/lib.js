@@ -72,8 +72,11 @@ function iconImg(file, o) {
   const url = iconUrl(file);
   if (!url) return null;
   if (/\.png(\?|$)/i.test(url)) {
-    return h("span", { class: "crop " + (o.class || ""), style: o.style || "", onClick: o.onClick, title: o.alt || "" },
-      h("img", { src: url, alt: o.alt || "", loading: "lazy" }));
+    const v2 = /\?v=2/.test(url);   // nouvelles images des cafés (1545×1999, carré utile au centre)
+    const base = url.split("?")[0];
+    const img = h("img", { class: "cropImg", src: v2 ? `https://images.leadconnectorhq.com/image/f_webp/q_80/r_640/u_${base}` : url, alt: o.alt || "", loading: "lazy" });
+    if (v2) img.addEventListener("error", () => { if (img.src !== base) img.src = base; });   // repli : image d'origine
+    return h("span", { class: "crop " + (v2 ? "v2 " : "") + (o.class || ""), style: o.style || "", onClick: o.onClick, title: o.alt || "" }, img);
   }
   return h("img", { class: o.class || "", style: o.style || "", src: url, alt: o.alt || "", loading: "lazy", onClick: o.onClick });
 }
