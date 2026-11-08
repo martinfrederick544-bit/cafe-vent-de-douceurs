@@ -997,7 +997,7 @@ begin
   if not (public.vd_is_delivery() or public.vd_is_staff()) then raise exception 'NOT_DELIVERY'; end if;
   return coalesce((
     select jsonb_agg(to_jsonb(x) order by (x.delivered_at is not null), x.created_at_ms) from (
-      select o.id, o.user_name, o.location, o.floor, o.cup_numbers, o.items, o.comment, o.created_at_ms, o.delivered_at, p.photo
+      select o.id, o.user_name, o.location, o.floor, o.personal_mug, o.cup_numbers, o.items, o.comment, o.created_at_ms, o.delivered_at, p.photo
         from public.vd_orders o left join public.vd_profiles p on p.id = o.user_id
        where o.mode = 'deliver' and o.status = 'COMPLÉTÉE'
          and o.test_device is not distinct from nullif(trim(coalesce(p_test, '')), '')

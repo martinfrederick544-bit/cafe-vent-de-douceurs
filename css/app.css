@@ -448,3 +448,23 @@ table.tbl { min-width: 0; font-size: .8rem; } table.tbl th, table.tbl td { paddi
 /* iPhone : le bandeau « Fermer » descend sous l'encoche / la barre d'état */
 .ovClose { padding-top: calc(env(safe-area-inset-top, 0px) + 22px); padding-bottom: 16px; }
 .ovBody { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 60px); }
+
+/* ---- images de tasses ---- */
+.cupImg { display: block; height: auto; background: #fff; border: 2px solid var(--stroke2); border-radius: 12px; }
+.cupFallback { display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; border: 2px solid var(--stroke2); border-radius: 12px; font-weight: 900; }
+.cupFallback span { font-size: 1.6rem; line-height: 1; }
+.cupFallback b { font-size: 1.4rem; }
+.cupBtn { appearance: none; display: inline-flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px; font-family: inherit; background: transparent; border: 3px solid var(--caramel); border-radius: 16px; cursor: pointer; color: var(--text); }
+.cupBtn small { font-size: .78rem; font-weight: 800; }
+.cupBtn.back { border-color: var(--good); cursor: default; }
+.cupBtn.back .cupImg { opacity: .55; }
+.ovCupResult { align-items: flex-end; }
+.ovCupResult .cupImg { border-width: 4px; border-color: var(--good); }
+.ovCupPick { padding: 4px; }
+.ovCupPick .cupImg { width: 100%; }
+.ovChoice .cupImg { border: none; }
+.cupGrid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
+.cupTile { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.cupTile .cupImg { border-width: 0; }
+.cupTile.free .cupImg { opacity: .5; }
+.cupTile.use { border-width: 4px; }

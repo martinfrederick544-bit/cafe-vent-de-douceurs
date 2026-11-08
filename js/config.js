@@ -17,6 +17,9 @@ window.VD = {
 
   // Compte staff UNIVERSEL : tout le café partage ce compte ; seul le mot de passe est demandé sur la page staff.
   STAFF_EMAIL: "info@synccrm.ca",
+  CUP_BASE: "https://assets.cdn.filesafe.space/0DkpRaoTql6L7OixzlfA/media/",
+  CUP_PERSO: "6af08ffa1ac4234dcdf59f1b.jpg",
+  CUP_IDS: ["6af08ffa4b6e00bd1b3b9e2f.jpg","6af08ffa3f4edcbb00425326.jpg","6af08ffa4b6e00bd1b3b9e57.jpg","6af08ffa3f4edcbb00425346.jpg","6af08ffb4b6e00bd1b3b9e77.jpg","6af08ffbaf2d4b8b2ff3edfc.jpg","6af08ffb4b6e00bd1b3b9e87.jpg","6af08ffb4b6e00bd1b3b9e93.jpg","6af08ffbe9d59b97b0729466.jpg","6af08ffb1ac4234dcdf59f68.jpg","6af08ffb3f4edcbb0042536a.jpg","6af08ffcaf2d4b8b2ff3ee20.jpg","6af08ffce9d59b97b0729482.jpg","6af08ff73f4edcbb004252b2.jpg","6af08ff71ac4234dcdf59e99.jpg","6af08ff71ac4234dcdf59e98.jpg","6af08ff7e9d59b97b07293d2.jpg","6af08ff7e9d59b97b07293d8.jpg","6af08ff7e9d59b97b07293cd.jpg","6af08ff8af2d4b8b2ff3ed70.jpg","6af08ff81ac4234dcdf59ebe.jpg","6af08ff81ac4234dcdf59eca.jpg","6af08ff8af2d4b8b2ff3ed80.jpg","6af08ff83f4edcbb004252e6.jpg","6af08ff8e9d59b97b0729412.jpg","6af08ff8e9d59b97b0729426.jpg","6af08ff94b6e00bd1b3b9dff.jpg","6af08ff94b6e00bd1b3b9e0f.jpg","6af08ff93f4edcbb004252fe.jpg","6af08ff93f4edcbb0042530a.jpg"],
   PICTO_DELIVER: "https://assets.cdn.filesafe.space/0DkpRaoTql6L7OixzlfA/media/6af08ff91ac4234dcdf59ef6.jpg",
   PICTO_PICKUP: "https://assets.cdn.filesafe.space/0DkpRaoTql6L7OixzlfA/media/6af08ffa4b6e00bd1b3b9e23.jpg",
   DELIVERY_EMAIL: "livraison@synccrm.ca",   // compte partagé du groupe livraison

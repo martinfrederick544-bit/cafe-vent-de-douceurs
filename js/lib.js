@@ -80,6 +80,20 @@ function iconImg(file, o) {
 
 /* ---------- erreurs ---------- */
 const FLOORS = ["RDC", "1er étage", "1R", "2e étage"];
+/** Image d'une tasse : n = numéro (1..30) ou "perso" pour la tasse personnelle. Au-delà de 30 : tasse dessinée. */
+function cupImg(n, size, cls) {
+  const id = n === "perso" ? VD.CUP_PERSO : VD.CUP_IDS[Number(n) - 1];
+  const px = (size || 80) + "px";
+  if (!id) {
+    return h("div", { class: "cupFallback " + (cls || ""), style: `width:${px};height:${Math.round((size || 80) * 1.2)}px` }, [h("span", {}, "☕"), h("b", {}, String(n))]);
+  }
+  const orig = VD.CUP_BASE + id;
+  const w = Math.min(640, Math.max(160, Math.round((size || 80) * 2.4)));
+  const img = h("img", { class: "cupImg " + (cls || ""), alt: n === "perso" ? "Tasse personnelle" : "Tasse " + n, loading: "lazy", style: `width:${px}`,
+    src: `https://images.leadconnectorhq.com/image/f_webp/q_80/r_${w}/u_${orig}` });
+  img.addEventListener("error", () => { if (img.src !== orig) img.src = orig; });   // repli : image d'origine
+  return img;
+}
 /** Couleur de chaque étage (blocs pleins ; ne pas confondre avec les cadres contour du sirop). */
 const FLOOR_COLORS = { "RDC": "#e8710a", "1er étage": "#2563c9", "1R": "#d6336c", "2e étage": "#1f9d55" };
 /** Gros bloc de couleur avec le local (et le nom de l'étage) : size = "sm" | "md" | "lg" */

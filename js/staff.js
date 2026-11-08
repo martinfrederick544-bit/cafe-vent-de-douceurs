@@ -154,23 +154,23 @@ function orderOverlay(o) {
   const cupBlock = h("div", { class: "ovSection" });
   cupBlock.appendChild(h("div", { class: "ovTitle" }, "Tasse"));
   if (o.personal_mug) {
-    cupBlock.appendChild(h("div", { class: "ovCupResult" }, [h("span", { class: "ovCupEmoji" }, "☕"), h("b", {}, "Tasse personnelle")]));
+    cupBlock.appendChild(h("div", { class: "ovCupResult" }, [cupImg("perso", 150), h("b", {}, "Tasse personnelle")]));
     cupBlock.appendChild(h("button", { class: "btn sm", type: "button", onClick: () => act(() => staffSetPersonalMug(o.id, false)) }, "↩ Changer"));
   } else {
-    if (cups.length) cupBlock.appendChild(h("div", { class: "ovCupResult" }, cups.map((n) => h("span", { class: "ovCupChip" }, [h("small", {}, "Tasse"), h("b", {}, String(n))]))));
+    if (cups.length) cupBlock.appendChild(h("div", { class: "ovCupResult" }, cups.map((n) => cupImg(n, 150))));
     if (missing > 0) {
       if (nDrinks > 1) cupBlock.appendChild(h("p", { class: "muted", style: "margin:6px 0 10px" }, `Il manque ${missing} tasse${missing > 1 ? "s" : ""} (${nDrinks} boissons).`));
       cupBlock.appendChild(h("div", { class: "ovChoices" }, [
         h("button", { class: "ovChoice", type: "button", onClick: () => act(async () => { if (missing > 1) await staffAssignCups(o.id, missing); else await staffAssignCup(o.id); }, "Tasse attribuée") }, [h("span", {}, "🎲"), "Tasse aléatoire"]),
         h("button", { class: "ovChoice" + (StaffUI.cupPick === o.id ? " on" : ""), type: "button", onClick: () => { StaffUI.cupPick = StaffUI.cupPick === o.id ? null : o.id; render(); } }, [h("span", {}, "🔢"), "Tasse précise"]),
-        h("button", { class: "ovChoice", type: "button", onClick: () => act(() => staffSetPersonalMug(o.id, true), "Tasse personnelle") }, [h("span", {}, "☕"), "Tasse personnelle"]),
+        h("button", { class: "ovChoice", type: "button", onClick: () => act(() => staffSetPersonalMug(o.id, true), "Tasse personnelle") }, [cupImg("perso", 62), "Tasse personnelle"]),
       ]));
       if (StaffUI.cupPick === o.id) {
         const nums = o.test_device
           ? Array.from({ length: Math.max(State.cups.length, 12) }, (_v, i) => i + 1).filter((n) => !cups.includes(n))
           : State.cups.filter((c) => c.status === "available").map((c) => c.number);
         cupBlock.appendChild(nums.length
-          ? h("div", { class: "ovCupGrid" }, nums.map((n) => h("button", { class: "ovCupPick", type: "button", onClick: () => act(() => staffAssignCup(o.id, n), `Tasse ${n} attribuée`) }, String(n))))
+          ? h("div", { class: "ovCupGrid" }, nums.map((n) => h("button", { class: "ovCupPick", type: "button", "aria-label": "Tasse " + n, onClick: () => act(() => staffAssignCup(o.id, n), `Tasse ${n} attribuée`) }, cupImg(n, 74))))
           : h("p", { class: "muted" }, "Aucune tasse disponible."));
       }
     }
@@ -230,8 +230,8 @@ function staffOrderCard(o) {
     const cup = State.cups.find((c) => c.number === n);
     const out = cup && cup.status === "in_use" && cup.order_id === o.id;
     return out
-      ? h("button", { class: "cupChip", type: "button", title: "Toucher quand la tasse est revenue", onClick: () => run(null, () => staffReturnCup(n), `Tasse ${n} disponible`) }, `Tasse ${n} · retourner`)
-      : h("span", { class: "cupChip back" }, `Tasse ${n} ✓`);
+      ? h("button", { class: "cupBtn out", type: "button", title: "Toucher quand la tasse est revenue", onClick: () => run(null, () => staffReturnCup(n), `Tasse ${n} disponible`) }, [cupImg(n, 78), h("small", {}, "↩ retourner")])
+      : h("span", { class: "cupBtn back" }, [cupImg(n, 78), h("small", {}, "✓ revenue")]);
   });
 
   const actions = h("div", { class: "actions" });
@@ -279,7 +279,7 @@ function staffOrderCard(o) {
     o.mode === "deliver" ? floorBlock(o.location, o.floor, "sm") : null,
     h("div", {}, groupItems(o.items).map(({ it, count }) => staffItemRow(it, count))),
     o.comment ? h("div", { class: "banner", style: "margin:8px 0 0" }, "💬 " + o.comment) : null,
-    o.personal_mug ? h("div", { class: "small", style: "margin-top:8px;font-weight:700" }, "☕ Tasse personnelle (pas de tasse du café)") : nDrinks > 1 || cups.length ? h("div", { class: "small", style: "margin-top:8px;font-weight:700;color:" + (o.status === "NOUVELLE" && missing ? "var(--warn)" : "var(--muted)") }, `Tasses : ${cups.length} / ${nDrinks} boisson${nDrinks > 1 ? "s" : ""}`) : null,
+    o.personal_mug ? h("div", { class: "cups" }, h("span", { class: "cupBtn back" }, [cupImg("perso", 78), h("small", {}, "Tasse personnelle")])) : nDrinks > 1 || cups.length ? h("div", { class: "small", style: "margin-top:8px;font-weight:700;color:" + (o.status === "NOUVELLE" && missing ? "var(--warn)" : "var(--muted)") }, `Tasses : ${cups.length} / ${nDrinks} boisson${nDrinks > 1 ? "s" : ""}`) : null,
     cups.length ? h("div", { class: "cups" }, cupChips) : null,
     o.status === "COMPLÉTÉE" && o.mode === "deliver" ? h("div", { class: "small", style: "margin-top:8px;font-weight:700;color:" + (o.delivered_at ? "var(--good)" : "var(--warn)") },
       o.delivered_at ? "🛒 Livrée à " + fmtTime(new Date(o.delivered_at).getTime()) : "🛒 En attente de livraison") : null,
@@ -469,7 +469,7 @@ function renderStaffCups() {
         if (!use) return toast(`Tasse ${c.number} disponible`);
         const ok = await confirmDialog(`Tasse n° ${c.number}`, `${o ? "Commande de " + o.user_name + ". " : ""}Marquer cette tasse comme retournée et disponible ?`, "Tasse retournée", "Non");
         if (ok) { try { await staffReturnCup(c.number); await loadCups(); toast(`Tasse ${c.number} disponible ✅`, "good"); render(); } catch (e) { toast(errText(e), "bad"); } }
-      } }, [h("b", {}, String(c.number)), h("small", {}, use ? (o ? o.user_name : "en usage") : "disponible")]);
+      } }, [cupImg(c.number, 64), h("small", {}, use ? (o ? o.user_name : "en usage") : "disponible")]);
   });
   return staffShell("staff_cups", [h("div", { class: "card" }, [
     h("div", { class: "row between" }, [h("h2", { style: "margin:0" }, "Tasses numérotées"), h("span", { class: "pill" }, [h("b", {}, String(inUse)), ` en usage / ${State.cups.length}`])]),

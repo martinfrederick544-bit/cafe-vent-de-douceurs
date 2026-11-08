@@ -8,8 +8,7 @@ function openDeliveryBig(o) {
     o.photo ? h("img", { src: o.photo, alt: o.user_name, style: "width:min(280px,80vw);height:min(280px,80vw);object-fit:cover;border-radius:24px" }) : avatar(o.user_name, "", 160, true),
     h("h2", { style: "margin:12px 0 0;font-size:1.8rem" }, o.user_name),
     h("div", { style: "margin:12px 0" }, floorBlock(o.location, o.floor, "lg")),
-    h("div", { style: "display:flex;gap:10px;flex-wrap:wrap;justify-content:center" }, (o.cup_numbers || []).map((n) =>
-      h("span", { class: "cupChip back", style: "font-size:2.2rem;padding:8px 22px;opacity:1;text-decoration:none" }, "Tasse n° " + n))),
+    h("div", { style: "display:flex;gap:12px;flex-wrap:wrap;justify-content:center" }, o.personal_mug ? [cupImg("perso", 170)] : (o.cup_numbers || []).map((n) => cupImg(n, 170))),
   ]));
 }
 
@@ -34,7 +33,7 @@ function deliveryCard(o) {
       ]),
     ]),
     floorBlock(o.location, o.floor, "md"),
-    cups.length ? h("div", { class: "cups", style: "cursor:pointer", onClick: () => openDeliveryBig(o) }, cups.map((n) => h("span", { class: "cupChip back", style: "text-decoration:none;opacity:1;font-size:1rem" }, "Tasse n° " + n))) : null,
+    (o.personal_mug || cups.length) ? h("div", { class: "cups", style: "cursor:pointer;gap:12px", onClick: () => openDeliveryBig(o) }, o.personal_mug ? [cupImg("perso", 96)] : cups.map((n) => cupImg(n, 96))) : null,
     h("div", {}, groupItems(o.items).map(({ it, count }) => h("div", { class: "itemLine" }, [
       it.icon ? iconImg(it.icon, { class: "big", alt: it.name, style: "width:44px;height:44px" }) : null,
       h("div", { class: "desc" }, [h("b", {}, (count > 1 ? count + " × " : "") + it.name), h("div", { class: "muted small" }, describeItem(it) || "Nature"), it.syrup ? levelBadge(it.syrup.level) : null]),
