@@ -80,6 +80,16 @@ function iconImg(file, o) {
 
 /* ---------- erreurs ---------- */
 const FLOORS = ["RDC", "1er étage", "1R", "2e étage"];
+/** Couleur de chaque étage (blocs pleins ; ne pas confondre avec les cadres contour du sirop). */
+const FLOOR_COLORS = { "RDC": "#e8710a", "1er étage": "#2563c9", "1R": "#d6336c", "2e étage": "#1f9d55" };
+/** Gros bloc de couleur avec le local (et le nom de l'étage) : size = "sm" | "md" | "lg" */
+function floorBlock(location, floor, size) {
+  const c = FLOOR_COLORS[floor] || "#6b7280";
+  return h("div", { class: "floorBlock " + (size || "md"), style: "background:" + c }, [
+    h("div", { class: "fbLoc" }, "📍 " + (location || "—")),
+    floor ? h("div", { class: "fbFloor" }, floor) : null,
+  ]);
+}
 /** <select> d'étage (valeur "" = pas encore choisi). */
 function floorSelect(value, onChange) {
   const sel = h("select", { "aria-label": "Étage" }, [h("option", { value: "" }, "— Choisis ton étage —")].concat(FLOORS.map((f) => h("option", { value: f, selected: f === value }, f))));

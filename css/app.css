@@ -389,3 +389,15 @@ table.tbl { min-width: 0; font-size: .8rem; } table.tbl th, table.tbl td { paddi
 .syrupPreview .measure { display: inline-block; margin-top: 6px; padding: 4px 14px; border-radius: 999px; color: #fff; font-weight: 800; }
 /* ---- mode test ---- */
 .testBanner { background: #fff3cd; border-color: #e0a800; color: #5c4400; }
+
+/* ---- local + étage : bloc de couleur (RDC orange, 1er bleu, 1R rose, 2e vert) ---- */
+.floorBlock { color: #fff; border-radius: 16px; text-align: center; font-weight: 900; line-height: 1.1; text-shadow: 0 1px 2px rgba(0,0,0,.25); }
+.floorBlock .fbFloor { font-weight: 800; opacity: .95; }
+.floorBlock.sm { padding: 8px 12px; margin: 10px 0; font-size: 1.15rem; display: flex; gap: 10px; justify-content: center; align-items: baseline; flex-wrap: wrap; }
+.floorBlock.sm .fbFloor { font-size: .95rem; }
+.floorBlock.md { padding: 14px 12px; margin: 10px 0; }
+.floorBlock.md .fbLoc { font-size: 2.2rem; }
+.floorBlock.md .fbFloor { font-size: 1.15rem; margin-top: 4px; }
+.floorBlock.lg { padding: 22px 14px; }
+.floorBlock.lg .fbLoc { font-size: 3.4rem; }
+.floorBlock.lg .fbFloor { font-size: 1.7rem; margin-top: 6px; }

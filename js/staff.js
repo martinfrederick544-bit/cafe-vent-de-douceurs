@@ -153,6 +153,7 @@ function staffOrderCard(o) {
       ]),
       h("span", { class: "status " + o.status }, o.status),
     ]),
+    o.mode === "deliver" ? floorBlock(o.location, o.floor, "sm") : null,
     h("div", {}, groupItems(o.items).map(({ it, count }) => staffItemRow(it, count))),
     o.comment ? h("div", { class: "banner", style: "margin:8px 0 0" }, "💬 " + o.comment) : null,
     o.personal_mug ? h("div", { class: "small", style: "margin-top:8px;font-weight:700" }, "☕ Tasse personnelle (pas de tasse du café)") : nDrinks > 1 || cups.length ? h("div", { class: "small", style: "margin-top:8px;font-weight:700;color:" + (o.status === "NOUVELLE" && missing ? "var(--warn)" : "var(--muted)") }, `Tasses : ${cups.length} / ${nDrinks} boisson${nDrinks > 1 ? "s" : ""}`) : null,

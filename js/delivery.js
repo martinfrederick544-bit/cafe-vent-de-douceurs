@@ -7,8 +7,7 @@ function openDeliveryBig(o) {
   openSheet(o.user_name, h("div", { style: "text-align:center" }, [
     o.photo ? h("img", { src: o.photo, alt: o.user_name, style: "width:min(280px,80vw);height:min(280px,80vw);object-fit:cover;border-radius:24px" }) : avatar(o.user_name, "", 160, true),
     h("h2", { style: "margin:12px 0 0;font-size:1.8rem" }, o.user_name),
-    h("div", { style: "font-size:3rem;font-weight:900;margin:8px 0;line-height:1.1" }, "📍 " + o.location),
-    o.floor ? h("div", { style: "font-size:1.6rem;font-weight:800" }, o.floor) : null,
+    h("div", { style: "margin:12px 0" }, floorBlock(o.location, o.floor, "lg")),
     h("div", { style: "display:flex;gap:10px;flex-wrap:wrap;justify-content:center" }, (o.cup_numbers || []).map((n) =>
       h("span", { class: "cupChip back", style: "font-size:2.2rem;padding:8px 22px;opacity:1;text-decoration:none" }, "Tasse n° " + n))),
   ]));
@@ -31,10 +30,10 @@ function deliveryCard(o) {
       avatar(o.user_name, o.photo, 72, !o.photo),
       h("div", { class: "who" }, [
         h("b", { style: "font-size:1.15rem" }, o.user_name),
-        h("div", { class: "delivLoc" }, "📍 " + o.location + (o.floor ? " · " + o.floor : "")),
         h("div", { class: "small muted" }, "Commandé à " + fmtTime(o.created_at_ms)),
       ]),
     ]),
+    floorBlock(o.location, o.floor, "md"),
     cups.length ? h("div", { class: "cups", style: "cursor:pointer", onClick: () => openDeliveryBig(o) }, cups.map((n) => h("span", { class: "cupChip back", style: "text-decoration:none;opacity:1;font-size:1rem" }, "Tasse n° " + n))) : null,
     h("div", {}, groupItems(o.items).map(({ it, count }) => h("div", { class: "itemLine" }, [
       it.icon ? iconImg(it.icon, { class: "big", alt: it.name, style: "width:44px;height:44px" }) : null,
