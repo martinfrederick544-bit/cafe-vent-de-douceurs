@@ -160,6 +160,7 @@ async function handleAuth(event, session) {
 /* ---------- navigation ---------- */
 function onRoute() {
   const r = route();
+  if (typeof StaffUI !== "undefined") { StaffUI.orderOpenId = null; StaffUI.cupPick = null; }
   if (State.session && State.profile) {
     const home = "order";
     if (AUTH_ROUTES.includes(r) && r !== "reset") { location.hash = home; return; }

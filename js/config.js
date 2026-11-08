@@ -17,6 +17,8 @@ window.VD = {
 
   // Compte staff UNIVERSEL : tout le café partage ce compte ; seul le mot de passe est demandé sur la page staff.
   STAFF_EMAIL: "info@synccrm.ca",
+  PICTO_DELIVER: "https://assets.cdn.filesafe.space/0DkpRaoTql6L7OixzlfA/media/6af08ff91ac4234dcdf59ef6.jpg",
+  PICTO_PICKUP: "https://assets.cdn.filesafe.space/0DkpRaoTql6L7OixzlfA/media/6af08ffa4b6e00bd1b3b9e23.jpg",
   DELIVERY_EMAIL: "livraison@synccrm.ca",   // compte partagé du groupe livraison
 
   // Pictogrammes : par défaut servis depuis /icons/. Pour les héberger ailleurs (ex. médiathèque GHL),

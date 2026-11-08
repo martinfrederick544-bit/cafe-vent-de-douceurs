@@ -401,3 +401,47 @@ table.tbl { min-width: 0; font-size: .8rem; } table.tbl th, table.tbl td { paddi
 .floorBlock.lg { padding: 22px 14px; }
 .floorBlock.lg .fbLoc { font-size: 3.4rem; }
 .floorBlock.lg .fbFloor { font-size: 1.7rem; margin-top: 6px; }
+
+/* ---- nouvelles commandes : tuiles photo + nom ---- */
+.orderTiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; }
+.orderTile { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 10px; background: var(--card, #fff); border: 2px solid var(--stroke); border-radius: 20px; cursor: pointer; font-family: inherit; color: inherit; box-shadow: var(--shadow); }
+.orderTile:active { transform: scale(.98); }
+.tilePhoto { width: 112px; height: 112px; border-radius: 50%; object-fit: cover; background: var(--bg2); }
+.tilePhoto.ph { display: flex; align-items: center; justify-content: center; font-size: 2.6rem; font-weight: 800; color: var(--caramel); border: 3px dashed var(--caramel); }
+.tileName { font-weight: 800; font-size: 1.15rem; text-align: center; line-height: 1.15; }
+/* ---- commande en plein écran ---- */
+.orderFull { position: fixed; inset: 0; z-index: 40; background: var(--bg, #f5eee0); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.ovClose { position: sticky; top: 0; z-index: 2; display: block; width: 100%; padding: 16px; font: inherit; font-size: 1.3rem; font-weight: 800; background: #3a2616; color: #fff; border: none; cursor: pointer; }
+.ovBody { max-width: 760px; margin: 0 auto; padding: 18px 16px 60px; }
+.ovHead { text-align: center; }
+.ovPhoto { width: min(240px, 60vw); height: min(240px, 60vw); border-radius: 28px; object-fit: cover; cursor: zoom-in; }
+.ovName { font-size: 2.2rem; font-weight: 900; margin: 10px 0 2px; line-height: 1.1; }
+.ovSection { margin-top: 22px; padding-top: 16px; border-top: 3px solid var(--stroke); }
+.ovTitle { font-size: 1rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 10px; }
+.ovChoices { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 600px) { .ovChoices { grid-template-columns: repeat(3, 1fr); } }
+.ovChoice { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 10px; font: inherit; font-size: 1.3rem; font-weight: 800; border: 3px solid var(--caramel); border-radius: 20px; background: #fff; cursor: pointer; min-height: 96px; }
+.ovChoice span { font-size: 2.4rem; line-height: 1; }
+.ovChoice.on { background: var(--caramel); color: #fff; }
+.ovCupGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 10px; margin-top: 14px; }
+.ovCupPick { padding: 16px 0; font: inherit; font-size: 1.6rem; font-weight: 900; border: 3px solid var(--stroke2, #c9b99f); border-radius: 16px; background: #fff; cursor: pointer; }
+.ovCupResult { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 10px; }
+.ovCupEmoji { font-size: 3.4rem; }
+.ovCupResult > b { font-size: 1.8rem; }
+.ovCupChip { display: inline-flex; flex-direction: column; align-items: center; min-width: 96px; padding: 10px 18px; border: 4px solid var(--good, #2e7d4f); border-radius: 20px; background: #fff; line-height: 1; }
+.ovCupChip small { font-size: .85rem; font-weight: 700; color: var(--muted); }
+.ovCupChip b { font-size: 3rem; font-weight: 900; }
+.bigItem { margin: 0 0 18px; padding: 14px; background: #fff; border: 2px solid var(--stroke); border-radius: 20px; }
+.bigItemHead { display: flex; align-items: center; gap: 16px; }
+.bigDrink, .bigDrink img { width: 112px; height: 112px; border-radius: 18px; object-fit: cover; flex: none; }
+.bigItemName { font-size: 1.9rem; font-weight: 900; line-height: 1.1; }
+.bigAddons { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
+.bigAddon { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 112px; padding: 10px 6px; font: inherit; background: #fff; border: 2px solid var(--stroke); border-radius: 18px; cursor: pointer; }
+.bigAddon img { width: 84px; height: 84px; object-fit: contain; border-radius: 12px; }
+.bigAddonEmoji { font-size: 3.4rem; line-height: 84px; }
+.bigAddonLabel { font-size: 1.15rem; font-weight: 800; text-align: center; line-height: 1.1; }
+.ovMode { display: flex; align-items: center; gap: 18px; margin-bottom: 14px; }
+.ovPicto { width: 130px; height: 130px; object-fit: contain; border-radius: 18px; background: #fff; flex: none; }
+.ovModeText b { font-size: 2.2rem; font-weight: 900; }
+.ovActions { margin-top: 28px; display: grid; gap: 14px; }
+.btn.ovBig { min-height: 84px; font-size: 1.9rem; width: 100%; }

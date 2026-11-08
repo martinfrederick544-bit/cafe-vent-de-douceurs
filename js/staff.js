@@ -7,6 +7,8 @@ const StaffUI = {
   userSearch: "", userFilter: "all", userLimit: 60,
   report: null, reportMonth: todayKey().slice(0, 7), reportBusy: false, reportTried: false,
   menuDraft: null,
+  orderOpenId: null,   // commande ouverte en plein écran
+  cupPick: null,       // commande pour laquelle on choisit une tasse précise
 };
 
 const STAFF_TABS = [
@@ -69,6 +71,8 @@ function renderStaffOrders() {
   const other = orders.filter((o) => o.status !== "NOUVELLE");
   const sales = orders.filter((o) => o.status !== "ANNULÉE" && dateKey(o.created_at_ms) === State.staffDate).reduce((s, o) => s + o.total_cents, 0);
 
+  const openOrder = StaffUI.orderOpenId ? newOrders.find((o) => o.id === StaffUI.orderOpenId) : null;
+  if (StaffUI.orderOpenId && !openOrder) { StaffUI.orderOpenId = null; StaffUI.cupPick = null; }
   const noPhoto = newOrders.filter((o) => !State.photoCache[o.user_id]).length;
   const pickInput = h("input", { value: State.settings.pickup_local || "", placeholder: "Ex : Local 118", maxlength: "40", style: "max-width:200px", "aria-label": "Local de ramassage du jour" });
   const pickSave = h("button", { class: "btn sm good", type: "button", onClick: async () => {
@@ -85,9 +89,128 @@ function renderStaffOrders() {
     noPhoto ? h("div", { class: "banner warn" }, `${noPhoto} commande(s) de clients sans photo de profil — ajoute-les dans l'onglet Clients.`) : null,
     h("div", { class: "staffCols" }, [
       h("div", {}, [h("div", { class: "colHead" }, [h("h2", { style: "margin:0" }, "Nouvelles"), h("span", { class: "count" }, String(newOrders.length))]),
-        newOrders.length ? newOrders.map(staffOrderCard) : h("div", { class: "card muted" }, "Aucune commande en attente ☕")]),
+        newOrders.length ? h("div", { class: "orderTiles" }, newOrders.map(orderTile)) : h("div", { class: "card muted" }, "Aucune commande en attente ☕")]),
       h("div", {}, [h("div", { class: "colHead" }, [h("h2", { style: "margin:0" }, "Complétées / annulées"), h("span", { class: "count" }, String(other.length))]),
         other.length ? other.map(staffOrderCard) : h("div", { class: "card muted" }, "Rien pour le moment.")]),
+    ]),
+    openOrder ? orderOverlay(openOrder) : null,
+  ]);
+}
+
+/* =========================================================
+   NOUVELLES COMMANDES : tuiles (photo + nom) → commande en plein écran
+========================================================= */
+function orderTile(o) {
+  const photo = State.photoCache[o.user_id] || "";
+  return h("button", { class: "orderTile", type: "button", "aria-label": "Ouvrir la commande de " + o.user_name, onClick: () => { StaffUI.orderOpenId = o.id; StaffUI.cupPick = null; render(); } }, [
+    photo ? h("img", { class: "tilePhoto", src: photo, alt: "" }) : h("div", { class: "tilePhoto ph" }, initials(o.user_name)),
+    h("div", { class: "tileName" }, o.user_name),
+  ]);
+}
+
+/** Pastilles d'ajouts (sirop, lait, sucre, guimauves, ajouts du menu) d'une boisson. */
+function itemAddons(it) {
+  const addons = [];
+  if (it.syrup) addons.push({ icon: it.syrup.icon, label: LEVELS_SHORT[it.syrup.level] || "", title: it.syrup.name, color: LEVEL_COLORS[it.syrup.level] });
+  ADDONS.forEach((a) => { if (it[a.key]) addons.push({ icon: a.icon, label: "×" + it[a.key], title: a.label }); });
+  if (it.marshmallows) addons.push({ icon: "guimauves.jpg", label: "", title: "Guimauves" });
+  if (it.dairy_free) addons.push({ emoji: "🌱", label: "sans lait", title: "Sans produits laitiers" });
+  (it.extras || []).forEach((e) => addons.push({ icon: e.icon || "", emoji: "➕", label: e.name, title: e.name }));
+  return addons;
+}
+/** Boisson en GRAND (plein écran) : image de la boisson, puis images des ajouts et des sirops. */
+function bigItemRow(it, count) {
+  return h("div", { class: "bigItem" }, [
+    h("div", { class: "bigItemHead" }, [
+      it.icon ? iconImg(it.icon, { class: "bigDrink", alt: it.name, onClick: () => openImage(it.icon, it.name) }) : null,
+      h("div", { class: "bigItemName" }, (count > 1 ? count + " × " : "") + it.name + (it.free ? " 🎁" : "")),
+    ]),
+    h("div", { class: "bigAddons" }, itemAddons(it).map((a) => h("button", { class: "bigAddon", type: "button", style: a.color ? "border:5px solid " + a.color : "", onClick: () => openAddonBig(a) }, [
+      a.icon ? h("img", { src: iconUrl(a.icon), alt: a.title }) : h("span", { class: "bigAddonEmoji" }, a.emoji),
+      h("span", { class: "bigAddonLabel" }, a.label || a.title)]))),
+  ]);
+}
+
+/** Commande en plein écran : 1) photo et nom 2) tasse 3) images des ajouts et sirops 4) livraison ou ramassage. */
+function orderOverlay(o) {
+  const photo = State.photoCache[o.user_id] || "";
+  const cups = o.cup_numbers || [];
+  const nDrinks = (o.items || []).length;
+  const missing = o.personal_mug ? 0 : Math.max(0, nDrinks - cups.length);
+  const close = () => { StaffUI.orderOpenId = null; StaffUI.cupPick = null; render(); };
+  const act = async (fn, okMsg, closeAfter) => {
+    try { await fn(); if (okMsg) toast(okMsg, "good"); await Promise.all([loadStaffOrders(), loadCups()]); if (closeAfter) { StaffUI.orderOpenId = null; StaffUI.cupPick = null; } render(); }
+    catch (e) { toast(errText(e), "bad"); }
+  };
+
+  // 1) photo et nom
+  const head = h("div", { class: "ovHead" }, [
+    photo ? h("img", { class: "ovPhoto", src: photo, alt: o.user_name, onClick: () => zoomPhoto(o.user_name, photo) }) : avatar(o.user_name, "", 150, true),
+    h("div", { class: "ovName" }, o.user_name),
+    h("div", { class: "muted" }, `${fmtTime(o.created_at_ms)} · Total ${money(o.total_cents)}${o.free_item ? " · 🎁 gratuite" : ""}`),
+  ]);
+
+  // 2) tasse : choix (aléatoire / précise / personnelle), puis seulement le résultat
+  const cupBlock = h("div", { class: "ovSection" });
+  cupBlock.appendChild(h("div", { class: "ovTitle" }, "Tasse"));
+  if (o.personal_mug) {
+    cupBlock.appendChild(h("div", { class: "ovCupResult" }, [h("span", { class: "ovCupEmoji" }, "☕"), h("b", {}, "Tasse personnelle")]));
+    cupBlock.appendChild(h("button", { class: "btn sm", type: "button", onClick: () => act(() => staffSetPersonalMug(o.id, false)) }, "↩ Changer"));
+  } else {
+    if (cups.length) cupBlock.appendChild(h("div", { class: "ovCupResult" }, cups.map((n) => h("span", { class: "ovCupChip" }, [h("small", {}, "Tasse"), h("b", {}, String(n))]))));
+    if (missing > 0) {
+      if (nDrinks > 1) cupBlock.appendChild(h("p", { class: "muted", style: "margin:6px 0 10px" }, `Il manque ${missing} tasse${missing > 1 ? "s" : ""} (${nDrinks} boissons).`));
+      cupBlock.appendChild(h("div", { class: "ovChoices" }, [
+        h("button", { class: "ovChoice", type: "button", onClick: () => act(async () => { if (missing > 1) await staffAssignCups(o.id, missing); else await staffAssignCup(o.id); }, "Tasse attribuée") }, [h("span", {}, "🎲"), "Tasse aléatoire"]),
+        h("button", { class: "ovChoice" + (StaffUI.cupPick === o.id ? " on" : ""), type: "button", onClick: () => { StaffUI.cupPick = StaffUI.cupPick === o.id ? null : o.id; render(); } }, [h("span", {}, "🔢"), "Tasse précise"]),
+        h("button", { class: "ovChoice", type: "button", onClick: () => act(() => staffSetPersonalMug(o.id, true), "Tasse personnelle") }, [h("span", {}, "☕"), "Tasse personnelle"]),
+      ]));
+      if (StaffUI.cupPick === o.id) {
+        const nums = o.test_device
+          ? Array.from({ length: Math.max(State.cups.length, 12) }, (_v, i) => i + 1).filter((n) => !cups.includes(n))
+          : State.cups.filter((c) => c.status === "available").map((c) => c.number);
+        cupBlock.appendChild(nums.length
+          ? h("div", { class: "ovCupGrid" }, nums.map((n) => h("button", { class: "ovCupPick", type: "button", onClick: () => act(() => staffAssignCup(o.id, n), `Tasse ${n} attribuée`) }, String(n))))
+          : h("p", { class: "muted" }, "Aucune tasse disponible."));
+      }
+    }
+  }
+
+  // 3) images des boissons, ajouts et sirops
+  const itemsBlock = h("div", { class: "ovSection" }, [h("div", { class: "ovTitle" }, "Commande"), groupItems(o.items).map(({ it, count }) => bigItemRow(it, count))]);
+
+  // 4) livraison ou ramassage
+  const deliver = o.mode === "deliver";
+  const modeBlock = h("div", { class: "ovSection" }, [
+    h("div", { class: "ovMode" }, [
+      h("img", { class: "ovPicto", src: deliver ? VD.PICTO_DELIVER : VD.PICTO_PICKUP, alt: deliver ? "Livraison" : "Ramassage" }),
+      h("div", { class: "ovModeText" }, [h("b", {}, deliver ? "Livraison" : "Ramassage"), !deliver && State.settings.pickup_local ? h("div", { class: "muted" }, "Local " + State.settings.pickup_local) : null]),
+    ]),
+    deliver ? floorBlock(o.location, o.floor, "lg") : null,
+  ]);
+
+  const actions = h("div", { class: "ovActions" }, [
+    h("button", { class: "btn good ovBig", type: "button", onClick: () => act(() => staffSetStatus(o.id, "COMPLÉTÉE"), "Commande complétée", true) }, "✔ Complétée"),
+    h("div", { class: "row", style: "justify-content:center;gap:10px" }, [
+      h("button", { class: "btn bad", type: "button", onClick: async () => {
+        const ok = await confirmDialog("Annuler la commande ?", `${o.user_name} sera remboursé·e de ${money(o.total_cents)} et les tasses seront libérées.`, "Annuler la commande", "Retour", true);
+        if (ok) act(() => staffSetStatus(o.id, "ANNULÉE"), "Commande annulée et remboursée", true);
+      } }, "Annuler la commande"),
+      h("button", { class: "btn bad", type: "button", onClick: async () => {
+        const ok = await confirmDialog("Supprimer cette commande ?",
+          o.test_device ? "Cette commande de test sera effacée." : `La commande de ${o.user_name} sera définitivement effacée${o.total_cents > 0 ? " et le client sera remboursé de " + money(o.total_cents) : ""}. À utiliser pour une commande de test ou en double.`,
+          "Supprimer", "Retour", true);
+        if (ok) act(() => staffDeleteOrder(o.id), "Commande supprimée", true);
+      } }, "🗑 Supprimer"),
+    ]),
+  ]);
+
+  return h("div", { class: "orderFull", role: "dialog", "aria-label": "Commande de " + o.user_name }, [
+    h("button", { class: "ovClose", type: "button", "aria-label": "Fermer", onClick: close }, "✕ Fermer"),
+    h("div", { class: "ovBody" }, [
+      head, cupBlock, itemsBlock, modeBlock,
+      o.comment ? h("div", { class: "banner", style: "font-size:1.2rem" }, "💬 " + o.comment) : null,
+      actions,
     ]),
   ]);
 }
