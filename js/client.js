@@ -397,7 +397,7 @@ function renderCartCard() {
     h("button", { class: "btn" + (UI.draft.mode === "deliver" ? " on" : ""), type: "button", onClick: () => { UI.draft.mode = "deliver"; render(); } }, "🛒 Livrer à mon local"),
     h("button", { class: "btn" + (UI.draft.mode === "pickup" ? " on" : ""), type: "button", onClick: () => { UI.draft.mode = "pickup"; render(); } }, "🚶 Je viens la chercher"),
   ]));
-  if (UI.draft.mode === "pickup") card.appendChild(h("p", { class: "muted small", style: "margin:8px 0 0" }, State.settings.pickup_local ? "📍 Ramassage au local " + State.settings.pickup_local + " aujourd'hui." : "Le café t'indiquera le local de ramassage."));
+  if (UI.draft.mode === "pickup") card.appendChild(h("p", { class: "muted small", style: "margin:8px 0 0" }, State.settings.pickup_local ? "📍 Ramassage : " + localName(State.settings.pickup_local) + " aujourd'hui." : "Le café t'indiquera le local de ramassage."));
   if (UI.draft.mode !== "pickup") {   // le local n'est demandé que pour une livraison
     card.appendChild(h("label", {}, "Local / endroit de livraison"));
     card.appendChild(h("input", { value: UI.draft.location, placeholder: "Ex : Local 203", maxlength: "80", onInput: (e) => { UI.draft.location = e.target.value; } }));
@@ -574,7 +574,7 @@ function renderMyOrdersScreen() {
       h("div", { class: "orderHead" }, [
         h("div", { class: "who" }, [
           h("b", {}, `${fmtDate(o.created_at_ms)} • ${fmtTime(o.created_at_ms)}`),
-          h("div", { class: "muted small" }, `${o.mode === "pickup" ? "Ramassage" + (State.settings && State.settings.pickup_local && o.status !== "ANNULÉE" ? " (local " + State.settings.pickup_local + ")" : "") : "Livraison : " + o.location} · Total ${money(o.total_cents)}`),
+          h("div", { class: "muted small" }, `${o.mode === "pickup" ? "Ramassage" + (State.settings && State.settings.pickup_local && o.status !== "ANNULÉE" ? " (" + localName(State.settings.pickup_local) + ")" : "") : "Livraison : " + o.location} · Total ${money(o.total_cents)}`),
         ]),
         h("span", { class: "status " + o.status }, o.status === "COMPLÉTÉE" && o.mode === "deliver" ? (o.delivered_at ? "LIVRÉE" : "EN LIVRAISON") : o.status),
       ]),

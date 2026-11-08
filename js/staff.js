@@ -187,7 +187,7 @@ function orderOverlay(o) {
   const modeBlock = h("div", { class: "ovSection" }, [
     h("div", { class: "ovMode" }, [
       h("img", { class: "ovPicto", src: deliver ? VD.PICTO_DELIVER : VD.PICTO_PICKUP, alt: deliver ? "Livraison" : "Ramassage" }),
-      h("div", { class: "ovModeText" }, [h("b", {}, deliver ? "Livraison" : "Ramassage"), !deliver && State.settings.pickup_local ? h("div", { class: "muted" }, "Local " + State.settings.pickup_local) : null]),
+      h("div", { class: "ovModeText" }, [h("b", {}, deliver ? "Livraison" : "Ramassage"), !deliver && State.settings.pickup_local ? h("div", { class: "muted" }, localName(State.settings.pickup_local)) : null]),
     ]),
     deliver ? floorBlock(o.location, o.floor, "lg") : null,
   ]);
@@ -276,7 +276,7 @@ function staffOrderCard(o) {
   const deliverMode = o.mode === "deliver";
   const modeRow = h("div", { class: "cardMode" }, [
     h("img", { class: "cardPicto", src: deliverMode ? VD.PICTO_DELIVER : VD.PICTO_PICKUP, alt: deliverMode ? "Livraison" : "Ramassage" }),
-    deliverMode ? floorBlock(o.location, o.floor, "md") : h("div", { class: "cardModeText" }, ["Ramassage", State.settings.pickup_local ? h("div", { class: "muted small" }, "Local " + State.settings.pickup_local) : null]),
+    deliverMode ? floorBlock(o.location, o.floor, "md") : h("div", { class: "cardModeText" }, ["Ramassage", State.settings.pickup_local ? h("div", { class: "muted small" }, localName(State.settings.pickup_local)) : null]),
   ]);
 
   return h("div", { class: "order" }, [
@@ -284,7 +284,7 @@ function staffOrderCard(o) {
       avatar(o.user_name, photo, 56, !photo, true),
       h("div", { class: "who" }, [
         h("b", {}, o.user_name),
-        h("div", { class: "small" }, [`${fmtTime(o.created_at_ms)}${dateKey(o.created_at_ms) !== State.staffDate ? " · " + fmtDate(o.created_at_ms) : ""} · `, h("b", {}, o.mode === "pickup" ? "Ramassage" + (State.settings.pickup_local ? " · local " + State.settings.pickup_local : "") : "📍 " + o.location + (o.floor ? " · " + o.floor : ""))]),
+        h("div", { class: "small" }, [`${fmtTime(o.created_at_ms)}${dateKey(o.created_at_ms) !== State.staffDate ? " · " + fmtDate(o.created_at_ms) : ""} · `, h("b", {}, o.mode === "pickup" ? "Ramassage" + (State.settings.pickup_local ? " · " + localName(State.settings.pickup_local) : "") : "📍 " + o.location + (o.floor ? " · " + o.floor : ""))]),
         h("div", { class: "small muted" }, `Total ${money(o.total_cents)}${o.free_item ? " · 🎁 gratuite" : ""}`),
       ]),
       h("span", { class: "status " + o.status }, o.status),

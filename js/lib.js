@@ -82,6 +82,8 @@ function iconImg(file, o) {
 }
 
 /* ---------- erreurs ---------- */
+/** « Local 118 » : n'ajoute pas « Local » si le texte le contient déjà. */
+function localName(x) { x = String(x || "").trim(); return /^local\b/i.test(x) ? x : "Local " + x; }
 const FLOORS = ["RDC", "1er étage", "1R", "2e étage"];
 /** Image d'une tasse : n = numéro (1..30) ou "perso" pour la tasse personnelle. Au-delà de 30 : tasse dessinée. */
 function cupImg(n, size, cls) {
