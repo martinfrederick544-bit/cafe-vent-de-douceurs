@@ -89,7 +89,7 @@ function cupImg(n, size, cls) {
   }
   const orig = VD.CUP_BASE + id;
   const w = Math.min(640, Math.max(160, Math.round((size || 80) * 2.4)));
-  const img = h("img", { class: "cupImg " + (cls || ""), alt: n === "perso" ? "Tasse personnelle" : "Tasse " + n, loading: "lazy", style: `width:${px}`,
+  const img = h("img", { class: "cupImg " + (cls || ""), alt: n === "perso" ? "Tasse personnelle" : "Tasse " + n, loading: "eager", style: `width:${px}`,
     src: `https://images.leadconnectorhq.com/image/f_webp/q_80/r_${w}/u_${orig}` });
   img.addEventListener("error", () => { if (img.src !== orig) img.src = orig; });   // repli : image d'origine
   return img;

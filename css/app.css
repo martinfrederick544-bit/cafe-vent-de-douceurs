@@ -468,3 +468,4 @@ table.tbl { min-width: 0; font-size: .8rem; } table.tbl th, table.tbl td { paddi
 .cupTile .cupImg { border-width: 0; }
 .cupTile.free .cupImg { opacity: .5; }
 .cupTile.use { border-width: 4px; }
+.cupImg { aspect-ratio: 1545 / 2000; object-fit: contain; }
