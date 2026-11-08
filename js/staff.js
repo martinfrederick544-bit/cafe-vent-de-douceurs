@@ -148,7 +148,7 @@ function staffOrderCard(o) {
       avatar(o.user_name, photo, 56, !photo, true),
       h("div", { class: "who" }, [
         h("b", {}, o.user_name),
-        h("div", { class: "small" }, [`${fmtTime(o.created_at_ms)}${dateKey(o.created_at_ms) !== State.staffDate ? " · " + fmtDate(o.created_at_ms) : ""} · `, h("b", {}, o.mode === "pickup" ? "Ramassage" + (State.settings.pickup_local ? " · local " + State.settings.pickup_local : "") : "📍 " + o.location)]),
+        h("div", { class: "small" }, [`${fmtTime(o.created_at_ms)}${dateKey(o.created_at_ms) !== State.staffDate ? " · " + fmtDate(o.created_at_ms) : ""} · `, h("b", {}, o.mode === "pickup" ? "Ramassage" + (State.settings.pickup_local ? " · local " + State.settings.pickup_local : "") : "📍 " + o.location + (o.floor ? " · " + o.floor : ""))]),
         h("div", { class: "small muted" }, `Total ${money(o.total_cents)}${o.free_item ? " · 🎁 gratuite" : ""}`),
       ]),
       h("span", { class: "status " + o.status }, o.status),
@@ -192,10 +192,10 @@ function openAddonBig(a) {
 }
 
 function exportOrdersCsv() {
-  const rows = [["Date", "Heure", "Client", "Local", "Mode", "Boissons", "Total", "Statut", "Tasses", "Commentaire"].join(",")];
+  const rows = [["Date", "Heure", "Client", "Local", "Étage", "Mode", "Boissons", "Total", "Statut", "Tasses", "Commentaire"].join(",")];
   State.staffOrders.filter((o) => dateKey(o.created_at_ms) === State.staffDate).sort((a, b) => a.created_at_ms - b.created_at_ms).forEach((o) => {
     const items = (o.items || []).map((it) => `${it.name}${describeItem(it) ? " [" + describeItem(it) + "]" : ""}${it.free ? " (GRATUIT)" : ""}`).join(" ; ");
-    rows.push([fmtDate(o.created_at_ms), fmtTime(o.created_at_ms), o.user_name, o.location, o.mode === "pickup" ? "Ramassage" : "Livraison", items,
+    rows.push([fmtDate(o.created_at_ms), fmtTime(o.created_at_ms), o.user_name, o.location, o.floor || "", o.mode === "pickup" ? "Ramassage" : "Livraison", items,
       (o.total_cents / 100).toFixed(2).replace(".", ","), o.status, (o.cup_numbers || []).join(" "), o.comment || ""].map(csvEsc).join(","));
   });
   downloadText(`commandes_${State.staffDate}.csv`, rows.join("\n"));
@@ -291,19 +291,19 @@ function openTopup(u) {
 
 function openUserEdit(u) {
   const err = errBox();
-  const name = h("input", { value: u.name }); const loc = h("input", { value: u.location || "" });
+  const name = h("input", { value: u.name }); const loc = h("input", { value: u.location || "" }); const floorSel = floorSelect(u.floor || "");
   const preview = h("div", {}, avatar(u.name, State.photoCache[u.id], 96, !u.has_photo));
   const picker = photoPicker(u.has_photo ? "Changer la photo" : "Ajouter une photo", async (dataUrl) => {
     await staffSetPhoto(u.id, dataUrl); u.has_photo = true; preview.innerHTML = ""; preview.appendChild(avatar(u.name, dataUrl, 96)); toast("Photo enregistrée ✅", "good"); render();
   });
   const save = h("button", { class: "btn good block", type: "button", style: "margin-top:14px", onClick: async () => {
-    try { await staffUpdateUser(u.id, name.value, loc.value); u.name = name.value.trim(); u.location = loc.value.trim(); closeSheet(); toast("Profil mis à jour ✅", "good"); render(); }
+    try { await staffUpdateUser(u.id, name.value, loc.value, floorSel.value); u.name = name.value.trim(); u.location = loc.value.trim(); u.floor = floorSel.value; closeSheet(); toast("Profil mis à jour ✅", "good"); render(); }
     catch (e) { showErr(err, errText(e)); }
   } }, "Enregistrer le nom / local");
   openSheet("Profil — " + u.name, [
     h("div", { class: "row", style: "gap:14px" }, [preview, h("div", {}, [h("div", { class: "muted small" }, u.email || ""), picker])]),
     h("p", { class: "muted small", style: "margin-top:10px" }, "Astuce : télécharge les photos depuis le dossier OneDrive de l'école, puis choisis-les ici (recadrées automatiquement en carré)."),
-    h("label", {}, "Nom"), name, h("label", {}, "Local par défaut"), loc, save, err,
+    h("label", {}, "Nom"), name, h("label", {}, "Local par défaut"), loc, h("label", {}, "Étage"), floorSel, save, err,
   ]);
 }
 

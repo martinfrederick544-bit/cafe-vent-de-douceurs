@@ -57,7 +57,7 @@ function testBanner() {
 
 const UI = {
   cart: [],
-  draft: { location: "", comment: "", mode: "deliver", useFree: false },
+  draft: { location: "", floor: "", comment: "", mode: "deliver", useFree: false },
   busy: false,
 };
 try { UI.cart = JSON.parse(localStorage.getItem("vd_cart_v1") || "[]"); if (!Array.isArray(UI.cart)) UI.cart = []; } catch (_e) { UI.cart = []; }
@@ -166,6 +166,8 @@ function renderRegister() {
   const err = errBox();
   const name = h("input", { autocomplete: "name", placeholder: "Ex : Marie Tremblay", required: true, maxlength: "80" });
   const loc = h("input", { placeholder: "Ex : Local 203", required: true, maxlength: "80" });
+  const floor = floorSelect("");
+  floor.required = true;
   const email = h("input", { type: "email", autocomplete: "email", placeholder: "prenom.nom@ecole.ca", required: true });
   const pass = h("input", { type: "password", autocomplete: "new-password", placeholder: "Au moins 8 caractères", required: true, minlength: "8" });
   const pass2 = h("input", { type: "password", autocomplete: "new-password", placeholder: "Répète le mot de passe", required: true });
@@ -173,6 +175,7 @@ function renderRegister() {
   const form = h("form", {}, [
     h("label", {}, "Nom complet"), name,
     h("label", {}, "Local (livraison par défaut)"), loc,
+    h("label", {}, "Étage"), floor,
     h("label", {}, "Courriel"), email,
     h("label", {}, "Mot de passe"), pass,
     h("label", {}, "Confirmer le mot de passe"), pass2,
@@ -186,7 +189,7 @@ function renderRegister() {
     try {
       const r = await sb.auth.signUp({
         email: email.value.trim(), password: pass.value,
-        options: { data: { name: name.value.trim(), location: loc.value.trim() } },
+        options: { data: { name: name.value.trim(), location: loc.value.trim(), floor: floor.value } },
       });
       if (r.error) throw r.error;
       if (!r.data.session) {
@@ -313,6 +316,7 @@ function photoPicker(label, onPhoto, small) {
 function renderOrderScreen() {
   const p = State.profile;
   // le local est toujours prérempli avec celui du compte (en essai staff, un local d'exemple si le profil n'en a pas)
+  if (!UI.draft.floor) UI.draft.floor = p.floor || "";
   if (!UI.draft.location) UI.draft.location = p.location || (testId() ? "Local d'essai" : "");
   const low = State.settings && p.balance_cents < State.settings.low_balance_cents;
 
@@ -397,6 +401,8 @@ function renderCartCard() {
   if (UI.draft.mode !== "pickup") {   // le local n'est demandé que pour une livraison
     card.appendChild(h("label", {}, "Local / endroit de livraison"));
     card.appendChild(h("input", { value: UI.draft.location, placeholder: "Ex : Local 203", maxlength: "80", onInput: (e) => { UI.draft.location = e.target.value; } }));
+    card.appendChild(h("label", {}, "Étage"));
+    card.appendChild(floorSelect(UI.draft.floor, (v) => { UI.draft.floor = v; }));
   }
   card.appendChild(h("label", {}, "Commentaire (optionnel)"));
   card.appendChild(h("textarea", { placeholder: "Ex : bien chaud, merci !", maxlength: "300", onInput: (e) => { UI.draft.comment = e.target.value; }, value: UI.draft.comment }));
@@ -420,6 +426,7 @@ async function submitOrder(btn, err) {
   const t = cartTotals();
   if (!UI.cart.length) return showErr(err, "Ton panier est vide.");
   if (UI.draft.mode !== "pickup" && !(UI.draft.location || "").trim()) return showErr(err, "Entre un local de livraison.");
+  if (UI.draft.mode !== "pickup" && !UI.draft.floor) return showErr(err, ERRORS_FR.FLOOR_REQUIRED);
   if (State.settings.require_photo && !p.photo) return showErr(err, ERRORS_FR.PHOTO_REQUIRED);
   if (!testId() && p.balance_cents - t.total < -(State.settings.credit_limit_cents || 0)) return showErr(err, ERRORS_FR.CREDIT_LIMIT_REACHED);
   if (!isCafeOpenNow()) {
@@ -434,9 +441,9 @@ async function submitOrder(btn, err) {
       sweetener: it.sweetener || 0, marshmallows: !!it.marshmallows, dairy_free: !!it.dairy_free,
       extras: (it.extras || []).filter((x) => typeof x === "string"),
     }));
-    const r = await placeOrder(newOrderId(), items, UI.draft.mode === "pickup" ? "" : UI.draft.location.trim(), UI.draft.comment.trim(), UI.draft.mode, UI.draft.useFree);
+    const r = await placeOrder(newOrderId(), items, UI.draft.mode === "pickup" ? "" : UI.draft.location.trim(), UI.draft.comment.trim(), UI.draft.mode, UI.draft.useFree, UI.draft.floor);
     UI.cart = []; saveCart();
-    UI.draft.comment = ""; UI.draft.useFree = false; UI.draft.location = "";   // la prochaine commande repart du local du compte
+    UI.draft.comment = ""; UI.draft.useFree = false; UI.draft.location = ""; UI.draft.floor = "";   // la prochaine commande repart du local du compte
     State.profile.balance_cents = r.balance_cents;
     await Promise.all([loadMyOrders(), loadMyTx(), loadLoyalty()]).catch(() => {});
     toast(testId() ? "✅ Commande de TEST envoyée (rien de réel)" : "✅ Commande envoyée au café !", "good");
@@ -634,9 +641,10 @@ function renderAccountScreen() {
   const err = errBox();
   const name = h("input", { value: p.name, autocomplete: "name", maxlength: "80" });
   const loc = h("input", { value: p.location, placeholder: "Ex : Local 203", maxlength: "80" });
+  const floorSel = floorSelect(p.floor || "");
   const save = h("button", { class: "btn good", type: "button", style: "margin-top:12px", onClick: async () => {
     err.classList.remove("show");
-    try { await updateMyProfile(name.value, loc.value); await loadProfile(); UI.draft.location = ""; toast("Profil enregistré ✅", "good"); render(); }
+    try { await updateMyProfile(name.value, loc.value, floorSel.value); await loadProfile(); UI.draft.location = ""; UI.draft.floor = ""; toast("Profil enregistré ✅", "good"); render(); }
     catch (e) { showErr(err, errText(e, "Enregistrement impossible.")); }
   } }, "Enregistrer");
   const profile = h("div", { class: "card" }, [
@@ -645,7 +653,7 @@ function renderAccountScreen() {
       avatar(p.name, p.photo, 84, !p.photo),
       h("div", {}, [h("div", { class: "muted small" }, p.email || ""), photoPicker(p.photo ? "Changer ma photo" : "Ajouter ma photo", async (dataUrl) => { await setMyPhoto(dataUrl); await loadProfile(); toast("Photo enregistrée ✅", "good"); render(); }, true)]),
     ]),
-    h("label", {}, "Nom"), name, h("label", {}, "Local par défaut"), loc, save, err,
+    h("label", {}, "Nom"), name, h("label", {}, "Local par défaut"), loc, h("label", {}, "Étage"), floorSel, save, err,
   ]);
 
   // notifications + déconnexion

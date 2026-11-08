@@ -95,6 +95,13 @@ alter table public.vd_settings add column if not exists mug_reminder_hours int n
 create index if not exists vd_orders_test_idx on public.vd_orders(test_device) where test_device is not null;
 alter table public.vd_wallet_tx add column if not exists test_device text;   -- mouvement de portefeuille « de test » (n'affecte jamais le vrai solde)
 create index if not exists vd_wallet_tx_test_idx on public.vd_wallet_tx(test_device) where test_device is not null;
+-- Étage du client (pour la livraison) : sur le profil et sur chaque commande en livraison
+alter table public.vd_profiles add column if not exists floor text not null default '';
+alter table public.vd_orders   add column if not exists floor text not null default '';
+create or replace function public.vd_clean_floor(p text)
+returns text language sql immutable set search_path = public as $$
+  select case when p in ('RDC', '1er étage', '1R', '2e étage') then p else '' end;
+$$;
 
 -- Configuration interne (URL + secret du service de notifications) — jamais lisible côté navigateur
 create table if not exists public.vd_config (
@@ -191,12 +198,13 @@ $$;
 create or replace function public.vd_handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  insert into public.vd_profiles (id, email, name, location)
+  insert into public.vd_profiles (id, email, name, location, floor)
   values (
     new.id,
     new.email,
     left(coalesce(nullif(trim(new.raw_user_meta_data->>'name'), ''), split_part(new.email, '@', 1)), 80),
-    left(coalesce(trim(new.raw_user_meta_data->>'location'), ''), 80)
+    left(coalesce(trim(new.raw_user_meta_data->>'location'), ''), 80),
+    public.vd_clean_floor(new.raw_user_meta_data->>'floor')
   )
   on conflict (id) do nothing;
   return new;
@@ -236,13 +244,15 @@ $$;
 -- ---------------------------------------------------------------------
 -- 4) CLIENT : profil
 -- ---------------------------------------------------------------------
-create or replace function public.vd_update_my_profile(p_name text, p_location text)
+drop function if exists public.vd_update_my_profile(text, text);
+create or replace function public.vd_update_my_profile(p_name text, p_location text, p_floor text default null)
 returns void language plpgsql security definer set search_path = public as $$
 begin
   if auth.uid() is null then raise exception 'NOT_AUTHENTICATED'; end if;
   if coalesce(trim(p_name),'') = '' then raise exception 'NAME_REQUIRED'; end if;
   update public.vd_profiles
-     set name = left(trim(p_name), 80), location = left(coalesce(trim(p_location), ''), 80)
+     set name = left(trim(p_name), 80), location = left(coalesce(trim(p_location), ''), 80),
+         floor = case when p_floor is null then floor else public.vd_clean_floor(p_floor) end
    where id = auth.uid();
 end;
 $$;
@@ -268,9 +278,10 @@ $$;
 -- ---------------------------------------------------------------------
 drop function if exists public.vd_place_order(text, jsonb, text, text, text, boolean);
 drop function if exists public.vd_place_order(text, jsonb, text, text, text, boolean, text);
+drop function if exists public.vd_place_order(text, jsonb, text, text, text, boolean, text, jsonb);
 create or replace function public.vd_place_order(
   p_id text, p_items jsonb, p_location text, p_comment text,
-  p_mode text default 'deliver', p_use_free boolean default false, p_test text default null, p_menu jsonb default null
+  p_mode text default 'deliver', p_use_free boolean default false, p_test text default null, p_menu jsonb default null, p_floor text default null
 ) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
@@ -298,6 +309,7 @@ declare
   v_exclean  jsonb;
   v_test     text;
   v_tbal     int := 0;
+  v_floor    text;
 begin
   if v_uid is null then raise exception 'NOT_AUTHENTICATED'; end if;
 
@@ -318,6 +330,9 @@ begin
   if p_mode is distinct from 'pickup' and coalesce(trim(p_location), '') = '' then raise exception 'LOCATION_REQUIRED'; end if;   -- le local n'est requis que pour une livraison
   if p_id is null or p_id !~ '^[A-Za-z0-9_-]{1,64}$' then raise exception 'BAD_ID'; end if;
   if p_mode not in ('deliver','pickup') then p_mode := 'deliver'; end if;
+  -- l'étage n'est demandé que pour une livraison (par défaut : celui du compte)
+  v_floor := case when p_mode = 'deliver' then public.vd_clean_floor(coalesce(nullif(trim(p_floor), ''), v_prof.floor)) else '' end;
+  if p_mode = 'deliver' and v_floor = '' then raise exception 'FLOOR_REQUIRED'; end if;
   if jsonb_typeof(p_items) is distinct from 'array'
      or jsonb_array_length(p_items) = 0 or jsonb_array_length(p_items) > 20 then
     raise exception 'BAD_ITEMS';
@@ -398,10 +413,10 @@ begin
   if v_test is null and v_new_bal < -v_set.credit_limit_cents then raise exception 'CREDIT_LIMIT_REACHED'; end if;
 
   insert into public.vd_orders
-    (id, created_at_ms, user_id, user_name, default_location, location, mode, comment, status, items, total_cents, free_item, test_device)
+    (id, created_at_ms, user_id, user_name, default_location, location, mode, comment, status, items, total_cents, free_item, test_device, floor)
   values
     (p_id, (extract(epoch from now()) * 1000)::bigint, v_uid, v_prof.name, v_prof.location,
-     left(trim(coalesce(p_location, '')), 80), p_mode, nullif(left(trim(coalesce(p_comment, '')), 300), ''), 'NOUVELLE', v_clean, v_total, v_free, v_test);
+     left(trim(coalesce(p_location, '')), 80), p_mode, nullif(left(trim(coalesce(p_comment, '')), 300), ''), 'NOUVELLE', v_clean, v_total, v_free, v_test, v_floor);
 
   if v_total > 0 and v_test is null then
     update public.vd_profiles set balance_cents = v_new_bal where id = v_uid;
@@ -577,12 +592,14 @@ begin
 end;
 $$;
 
-create or replace function public.vd_staff_update_user(p_user uuid, p_name text, p_location text)
+drop function if exists public.vd_staff_update_user(uuid, text, text);
+create or replace function public.vd_staff_update_user(p_user uuid, p_name text, p_location text, p_floor text default null)
 returns void language plpgsql security definer set search_path = public as $$
 begin
   perform public.vd_require_staff();
   if coalesce(trim(p_name),'') = '' then raise exception 'NAME_REQUIRED'; end if;
-  update public.vd_profiles set name = left(trim(p_name), 80), location = left(coalesce(trim(p_location), ''), 80) where id = p_user;
+  update public.vd_profiles set name = left(trim(p_name), 80), location = left(coalesce(trim(p_location), ''), 80),
+    floor = case when p_floor is null then floor else public.vd_clean_floor(p_floor) end where id = p_user;
 end;
 $$;
 
@@ -909,13 +926,13 @@ revoke execute on all functions in schema public from public, anon, authenticate
 alter default privileges in schema public revoke execute on functions from public, anon, authenticated;
 grant execute on function
   public.vd_is_staff(), public.vd_my_loyalty(),
-  public.vd_update_my_profile(text, text), public.vd_set_my_photo(text),
-  public.vd_place_order(text, jsonb, text, text, text, boolean, text, jsonb),
+  public.vd_update_my_profile(text, text, text), public.vd_set_my_photo(text),
+  public.vd_place_order(text, jsonb, text, text, text, boolean, text, jsonb, text),
   public.vd_staff_set_status(text, text), public.vd_staff_assign_cup(text, int),
   public.vd_staff_assign_cups(text, int),
   public.vd_staff_return_cup(int), public.vd_staff_set_cup_count(int),
   public.vd_staff_topup(uuid, int, text, text), public.vd_staff_set_photo(uuid, text),
-  public.vd_staff_update_user(uuid, text, text), public.vd_staff_save_setting(text, jsonb),
+  public.vd_staff_update_user(uuid, text, text, text), public.vd_staff_save_setting(text, jsonb),
   public.vd_staff_report(date, date), public.vd_save_push(text, text, text, text),
   public.vd_unsave_push(text), public.vd_help_check()
 to authenticated;
@@ -980,7 +997,7 @@ begin
   if not (public.vd_is_delivery() or public.vd_is_staff()) then raise exception 'NOT_DELIVERY'; end if;
   return coalesce((
     select jsonb_agg(to_jsonb(x) order by (x.delivered_at is not null), x.created_at_ms) from (
-      select o.id, o.user_name, o.location, o.cup_numbers, o.items, o.comment, o.created_at_ms, o.delivered_at, p.photo
+      select o.id, o.user_name, o.location, o.floor, o.cup_numbers, o.items, o.comment, o.created_at_ms, o.delivered_at, p.photo
         from public.vd_orders o left join public.vd_profiles p on p.id = o.user_id
        where o.mode = 'deliver' and o.status = 'COMPLÉTÉE'
          and o.test_device is not distinct from nullif(trim(coalesce(p_test, '')), '')

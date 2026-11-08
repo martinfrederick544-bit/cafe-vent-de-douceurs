@@ -79,7 +79,15 @@ function iconImg(file, o) {
 }
 
 /* ---------- erreurs ---------- */
+const FLOORS = ["RDC", "1er étage", "1R", "2e étage"];
+/** <select> d'étage (valeur "" = pas encore choisi). */
+function floorSelect(value, onChange) {
+  const sel = h("select", { "aria-label": "Étage" }, [h("option", { value: "" }, "— Choisis ton étage —")].concat(FLOORS.map((f) => h("option", { value: f, selected: f === value }, f))));
+  if (onChange) sel.addEventListener("change", () => onChange(sel.value));
+  return sel;
+}
 const ERRORS_FR = {
+  FLOOR_REQUIRED: "Choisis ton étage pour la livraison.",
   PHOTO_REQUIRED: "Une photo de profil est requise avant de commander. Ajoute-la dans « Mon compte » ou demande au café de le faire.",
   CREDIT_LIMIT_REACHED: "Tu as atteint le découvert maximal autorisé. Passe au café recharger ton portefeuille avant de commander.",
   BAD_STAFF_PASSWORD: "Mot de passe staff incorrect.",

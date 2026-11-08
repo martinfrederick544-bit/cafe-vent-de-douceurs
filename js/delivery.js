@@ -8,6 +8,7 @@ function openDeliveryBig(o) {
     o.photo ? h("img", { src: o.photo, alt: o.user_name, style: "width:min(280px,80vw);height:min(280px,80vw);object-fit:cover;border-radius:24px" }) : avatar(o.user_name, "", 160, true),
     h("h2", { style: "margin:12px 0 0;font-size:1.8rem" }, o.user_name),
     h("div", { style: "font-size:3rem;font-weight:900;margin:8px 0;line-height:1.1" }, "📍 " + o.location),
+    o.floor ? h("div", { style: "font-size:1.6rem;font-weight:800" }, o.floor) : null,
     h("div", { style: "display:flex;gap:10px;flex-wrap:wrap;justify-content:center" }, (o.cup_numbers || []).map((n) =>
       h("span", { class: "cupChip back", style: "font-size:2.2rem;padding:8px 22px;opacity:1;text-decoration:none" }, "Tasse n° " + n))),
   ]));
@@ -30,7 +31,7 @@ function deliveryCard(o) {
       avatar(o.user_name, o.photo, 72, !o.photo),
       h("div", { class: "who" }, [
         h("b", { style: "font-size:1.15rem" }, o.user_name),
-        h("div", { class: "delivLoc" }, "📍 " + o.location),
+        h("div", { class: "delivLoc" }, "📍 " + o.location + (o.floor ? " · " + o.floor : "")),
         h("div", { class: "small muted" }, "Commandé à " + fmtTime(o.created_at_ms)),
       ]),
     ]),

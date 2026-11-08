@@ -56,7 +56,7 @@ function applyPhotoOverlay() {
 async function loadProfile() {
   if (!State.session) { State.profile = null; return null; }
   const data = unwrap(await sb.from("vd_profiles")
-    .select("id,email,name,location,photo,is_staff,is_delivery,balance_cents")
+    .select("id,email,name,location,floor,photo,is_staff,is_delivery,balance_cents")
     .eq("id", State.session.user.id).maybeSingle());
   State.profile = data || null;
   if (data && testId()) {
@@ -100,13 +100,16 @@ const testFilter = (q) => (testId() ? q.eq("test_device", testId()) : q.is("test
 async function loadClientData() {
   await Promise.all([loadProfile(), loadSettings(), loadMyOrders(), loadMyTx(), loadLoyalty()]);
 }
-async function placeOrder(id, items, location, comment, mode, useFree) {
+async function placeOrder(id, items, location, comment, mode, useFree, floor) {
   const d = unwrap(await sb.rpc("vd_place_order", {
-    p_id: id, p_items: items, p_location: location, p_comment: comment || "", p_mode: mode, p_use_free: !!useFree, p_test: testId() || null, p_menu: testId() ? menu() : null,
+    p_id: id, p_items: items, p_location: location, p_comment: comment || "", p_mode: mode, p_use_free: !!useFree, p_test: testId() || null, p_menu: testId() ? menu() : null, p_floor: floor || null,
   }));
   return d;
 }
-async function updateMyProfile(name, location) { if (testId()) { TestOv.edit((o) => { o.me.name = name; o.me.location = location; }); return; } unwrap(await sb.rpc("vd_update_my_profile", { p_name: name, p_location: location })); }
+async function updateMyProfile(name, location, floor) {
+  if (testId()) { TestOv.edit((o) => { o.me.name = name; o.me.location = location; if (floor !== undefined) o.me.floor = floor; }); return; }
+  unwrap(await sb.rpc("vd_update_my_profile", { p_name: name, p_location: location, p_floor: floor === undefined ? null : floor }));
+}
 async function setMyPhoto(dataUrl) { if (testId()) { TestOv.edit((o) => { o.me.photo = dataUrl; }); return; } unwrap(await sb.rpc("vd_set_my_photo", { p_photo: dataUrl })); }
 
 /* ---------- staff ---------- */
@@ -132,12 +135,12 @@ async function loadCups() {
 }
 async function loadUsers() {
   State.users = unwrap(await sb.from("vd_profiles")
-    .select("id,email,name,location,balance_cents,has_photo,is_staff").eq("is_staff", false).eq("is_delivery", false).order("name").limit(1000)) || [];
+    .select("id,email,name,location,floor,balance_cents,has_photo,is_staff").eq("is_staff", false).eq("is_delivery", false).order("name").limit(1000)) || [];
   if (testId()) {
     const ov = TestOv.get(), sums = await testTxSums();
     State.users = State.users.map((u) => {
       const o = ov.users[u.id] || {};
-      return Object.assign({}, u, { balance_cents: u.balance_cents + (sums[u.id] || 0) }, o.name !== undefined ? { name: o.name } : {}, o.location !== undefined ? { location: o.location } : {}, o.photo ? { has_photo: true } : {});
+      return Object.assign({}, u, { balance_cents: u.balance_cents + (sums[u.id] || 0) }, o.name !== undefined ? { name: o.name } : {}, o.location !== undefined ? { location: o.location } : {}, o.floor !== undefined ? { floor: o.floor } : {}, o.photo ? { has_photo: true } : {});
     });
   }
 }
@@ -169,7 +172,10 @@ async function staffSetPhoto(userId, dataUrl) {
   if (testId()) { TestOv.edit((o) => { o.users[userId] = Object.assign({}, o.users[userId], { photo: dataUrl }); }); State.photoCache[userId] = dataUrl; return; }
   unwrap(await sb.rpc("vd_staff_set_photo", { p_user: userId, p_photo: dataUrl })); State.photoCache[userId] = dataUrl;
 }
-async function staffUpdateUser(userId, name, location) { if (testId()) { TestOv.edit((o) => { o.users[userId] = Object.assign({}, o.users[userId], { name: String(name).trim(), location: String(location).trim() }); }); return; } unwrap(await sb.rpc("vd_staff_update_user", { p_user: userId, p_name: name, p_location: location })); }
+async function staffUpdateUser(userId, name, location, floor) {
+  if (testId()) { TestOv.edit((o) => { o.users[userId] = Object.assign({}, o.users[userId], { name: String(name).trim(), location: String(location).trim() }, floor !== undefined ? { floor } : {}); }); return; }
+  unwrap(await sb.rpc("vd_staff_update_user", { p_user: userId, p_name: name, p_location: location, p_floor: floor === undefined ? null : floor }));
+}
 async function staffSaveSetting(key, value) { if (testId()) { TestOv.edit((o) => { o.settings[key] = value; }); return; } unwrap(await sb.rpc("vd_staff_save_setting", { p_key: key, p_value: value })); }
 async function staffReport(from, to) { return unwrap(await sb.rpc("vd_staff_report", { p_from: from, p_to: to })); }
 async function staffUserTx(userId, limit) {
