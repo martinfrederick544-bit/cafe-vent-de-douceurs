@@ -126,10 +126,14 @@ async function loadStaffOrders() {
 }
 async function loadCups() {
   let c = unwrap(await sb.from("vd_cups").select("*").order("number")) || [];
-  if (testId()) {   // mode test : tasses « fantômes » (retours, nombre total) appliquées par-dessus les vraies
-    const ov = TestOv.get(), n = ov.settings.cup_count;
-    c = c.map((x) => (ov.cups[x.number] ? Object.assign({}, x, { status: ov.cups[x.number], order_id: ov.cups[x.number] === "available" ? null : x.order_id }) : x));
-    if (n) { c = c.filter((x) => x.number <= n); for (let i = c.length + 1; i <= n; i++) c.push({ number: i, status: "available", order_id: null }); }
+  if (testId()) {
+    // mode test : SIMULATION fidèle des tasses. Les vraies tasses sont ignorées ; une tasse est « en usage » tant qu'une commande
+    // de test de cet appareil la porte et qu'elle n'a pas été retournée (même comportement et même visuel qu'en vrai).
+    const ov = TestOv.get(), n = ov.settings.cup_count || c.length || 30;
+    const tests = unwrap(await sb.from("vd_orders").select("id,cup_numbers,status,created_at_ms").eq("test_device", testId()).order("created_at_ms")) || [];
+    const use = {};
+    tests.filter((o) => o.status !== "ANNULÉE").forEach((o) => (o.cup_numbers || []).forEach((num) => { if (ov.cups[num] !== "available") use[num] = o.id; }));
+    c = Array.from({ length: n }, (_v, i) => { const num = i + 1; return use[num] ? { number: num, status: "in_use", order_id: use[num] } : { number: num, status: "available", order_id: null }; });
   }
   State.cups = c;
 }
@@ -158,7 +162,7 @@ async function _ensurePhotosReal(ids) {
   return need.length;
 }
 async function staffSetStatus(orderId, status) { unwrap(await sb.rpc("vd_staff_set_status", { p_order_id: orderId, p_status: status })); }
-async function staffAssignCup(orderId, cup) { return unwrap(await sb.rpc("vd_staff_assign_cup", { p_order_id: orderId, p_cup: cup === undefined ? null : cup })); }
+async function staffAssignCup(orderId, cup) { if (testId() && cup != null) TestOv.edit((o) => { delete o.cups[cup]; }); return unwrap(await sb.rpc("vd_staff_assign_cup", { p_order_id: orderId, p_cup: cup === undefined ? null : cup })); }
 async function staffAssignCups(orderId, count) { return unwrap(await sb.rpc("vd_staff_assign_cups", { p_order_id: orderId, p_count: count })); }
 async function loadDelivery() { State.delivery = unwrap(await sb.rpc("vd_delivery_list", { p_test: testId() || null })) || []; }
 async function staffDeleteOrder(orderId) { unwrap(await sb.rpc("vd_staff_delete_order", { p_order_id: orderId })); }

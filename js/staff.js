@@ -164,14 +164,18 @@ function orderOverlay(o) {
     if (missing > 0) {
       if (nDrinks > 1) cupBlock.appendChild(h("p", { class: "muted", style: "margin:6px 0 10px" }, `Il manque ${missing} tasse${missing > 1 ? "s" : ""} (${nDrinks} boissons).`));
       cupBlock.appendChild(h("div", { class: "ovChoices" }, [
-        h("button", { class: "ovChoice", type: "button", onClick: () => act(async () => { if (missing > 1) await staffAssignCups(o.id, missing); else await staffAssignCup(o.id); }, "Tasse attribuée") }, [h("span", {}, "🎲"), "Tasse aléatoire"]),
+        h("button", { class: "ovChoice", type: "button", onClick: () => act(async () => {
+          if (o.test_device) {   // simulation : on prend les plus petites tasses libres (comme le fait le vrai système)
+            const free = State.cups.filter((c) => c.status === "available").map((c) => c.number).filter((n) => !cups.includes(n));
+            if (free.length < missing) throw new Error("NO_CUP_AVAILABLE");
+            for (let i = 0; i < missing; i++) await staffAssignCup(o.id, free[i]);
+          } else if (missing > 1) await staffAssignCups(o.id, missing); else await staffAssignCup(o.id);
+        }, "Tasse attribuée") }, [h("span", {}, "🎲"), "Tasse aléatoire"]),
         h("button", { class: "ovChoice" + (StaffUI.cupPick === o.id ? " on" : ""), type: "button", onClick: () => { StaffUI.cupPick = StaffUI.cupPick === o.id ? null : o.id; render(); } }, [h("span", {}, "🔢"), "Tasse précise"]),
         h("button", { class: "ovChoice", type: "button", onClick: () => act(() => staffSetPersonalMug(o.id, true), "Tasse personnelle") }, [cupImg("perso", 62), "Tasse personnelle"]),
       ]));
       if (StaffUI.cupPick === o.id) {
-        const nums = o.test_device
-          ? Array.from({ length: Math.max(State.cups.length, 12) }, (_v, i) => i + 1).filter((n) => !cups.includes(n))
-          : State.cups.filter((c) => c.status === "available").map((c) => c.number);
+        const nums = State.cups.filter((c) => c.status === "available").map((c) => c.number).filter((n) => !cups.includes(n));
         cupBlock.appendChild(nums.length
           ? h("div", { class: "ovCupGrid" }, nums.map((n) => h("button", { class: "ovCupPick", type: "button", "aria-label": "Tasse " + n, onClick: () => act(() => staffAssignCup(o.id, n), `Tasse ${n} attribuée`) }, cupImg(n, 74))))
           : h("p", { class: "muted" }, "Aucune tasse disponible."));
