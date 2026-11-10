@@ -322,8 +322,8 @@ function renderOrderScreen() {
 
   const banners = [];
   const pb = photoBanner(); if (pb) banners.push(pb);
-  if (p.balance_cents < 0) banners.push(h("div", { class: "banner bad" }, ["💰 Ton solde est négatif : ", h("b", {}, money(p.balance_cents)), ". Passe au café pour recharger ton portefeuille."]));
-  else if (low) banners.push(h("div", { class: "banner warn" }, ["💰 Solde bas : ", h("b", {}, money(p.balance_cents)), ". Pense à faire recharger ton portefeuille au café."]));
+  if (p.balance_cents < 0) banners.push(h("div", { class: "banner bad" }, ["💰 Ton solde est négatif : ", h("b", {}, money(p.balance_cents)), ". Passe voir Audrey ou Julie pour recharger ton portefeuille."]));
+  else if (low) banners.push(h("div", { class: "banner warn" }, ["💰 Solde bas : ", h("b", {}, money(p.balance_cents)), ". Pense à faire recharger ton portefeuille auprès d'Audrey ou Julie."]));
   const nb = notifBanner("client"); if (nb) banners.push(nb);
   if (!isCafeOpenNow()) banners.push(h("div", { class: "banner" }, [h("b", {}, "Le café est fermé en ce moment. "), "Tu peux quand même préparer ta commande : elle sera servie à la prochaine période d'ouverture."]));
   if (State.loyalty.available > 0) banners.push(h("div", { class: "banner good" }, ["🎁 Tu as ", h("b", {}, String(State.loyalty.available)), " boisson(s) gratuite(s) à utiliser dans ton panier !"]));
@@ -612,7 +612,7 @@ function renderAccountScreen() {
   const wallet = h("div", { class: "card" }, [
     h("h2", {}, "💰 Mon portefeuille"),
     h("div", { class: "balance", style: p.balance_cents < 0 ? "color:var(--bad)" : low ? "color:var(--warn)" : "" }, money(p.balance_cents)),
-    low ? h("div", { class: "banner " + (p.balance_cents < 0 ? "bad" : "warn"), style: "margin-top:10px" }, p.balance_cents < 0 ? "Ton solde est négatif : passe au café recharger ton portefeuille (argent comptant)." : "Solde bas : fais recharger ton portefeuille au café (argent comptant).") : h("p", { class: "muted small", style: "margin-top:8px" }, "Les recharges se font au café, en argent comptant. Chaque commande est déduite automatiquement."),
+    low ? h("div", { class: "banner " + (p.balance_cents < 0 ? "bad" : "warn"), style: "margin-top:10px" }, p.balance_cents < 0 ? "Ton solde est négatif : passe voir Audrey ou Julie pour recharger ton portefeuille (argent comptant)." : "Solde bas : fais recharger ton portefeuille auprès d'Audrey ou Julie (argent comptant).") : h("p", { class: "muted small", style: "margin-top:8px" }, "Les recharges se font auprès d'Audrey et Julie, en argent comptant. Chaque commande est déduite automatiquement."),
   ]);
   if (State.myTx.length) {
     const txs = h("div", { style: "margin-top:10px" }, [h("h3", {}, "Derniers mouvements")]);
